@@ -55,9 +55,9 @@ logger = logging.getLogger('warp')
 verbose = 0
 
 
-def accept_client(client_reader, client_writer, *, loop=None):
+def accept_client(client_reader, client_writer, cloak, *, loop=None):
     ident = hex(id(client_reader))[-6:]
-    task = asyncio.ensure_future(process_warp(client_reader, client_writer, loop=loop), loop=loop)
+    task = asyncio.ensure_future(process_warp(client_reader, client_writer, cloak, loop=loop), loop=loop)
     clients[task] = (client_reader, client_writer)
     started_time = time()
 
@@ -70,7 +70,7 @@ def accept_client(client_reader, client_writer, *, loop=None):
     task.add_done_callback(client_done)
 
 
-async def process_warp(client_reader, client_writer, *, loop=None):
+async def process_warp(client_reader, client_writer, cloak, *, loop=None):
     ident = str(hex(id(client_reader)))[-6:]
     header = ''
     payload = b''
@@ -194,8 +194,9 @@ async def process_warp(client_reader, client_writer, *, loop=None):
             return ['X-%s: %s\r\n' % (generate_rndstrs(string.ascii_uppercase, 16),
                 generate_rndstrs(string.ascii_letters + string.digits, 128)) for _ in range(32)]
 
-        req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
-        await req_writer.drain()
+        if cloak:
+            req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
+            await req_writer.drain()
 
         req_writer.write(b'Host: ')
         await req_writer.drain()
@@ -232,9 +233,9 @@ async def process_warp(client_reader, client_writer, *, loop=None):
     client_writer.close()
 
 
-async def start_warp_server(host, port, *, loop = None):
+async def start_warp_server(host, port, cloak, *, loop = None):
     try:
-        accept = functools.partial(accept_client, loop=loop)
+        accept = functools.partial(accept_client, cloak=cloak, loop=loop)
         server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
     except OSError as ex:
         logger.critical('!!! Failed to bind server at [%s:%d]: %s' % (host, port, ex.args[1]))
@@ -254,6 +255,8 @@ def main():
                       help='Host to listen [default: %(default)s]')
     parser.add_argument('-p', '--port', type=int, default=8800,
                       help='Port to listen [default: %(default)d]')
+    parser.add_argument('-c', '--cloak', action='store_true', default=False,
+                      help='Add random string to header [default: %(default)s]')
     parser.add_argument('-v', '--verbose', action='count', default=0,
                       help='Print verbose')
     args = parser.parse_args()
@@ -270,7 +273,7 @@ def main():
     verbose = args.verbose
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start_warp_server(args.host, args.port))
+        loop.run_until_complete(start_warp_server(args.host, args.port, args.cloak))
         loop.run_forever()
     except OSError:
         pass
