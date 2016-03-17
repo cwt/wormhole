@@ -33,6 +33,7 @@ if sys.version_info < (3, 5):
     exit(1)
 
 from argparse import ArgumentParser
+from string import ascii_letters, ascii_uppercase, digits
 from socket import TCP_NODELAY
 from time import time
 from traceback import print_exc
@@ -53,6 +54,13 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] {%(levelname)s} %(
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 logger = logging.getLogger('warp')
 verbose = 0
+
+
+def generate_dummyheaders():
+    def generate_rndstrs(strings, length):
+        return ''.join(random.choice(strings) for _ in range(length))
+    return ['X-%s: %s\r\n' % (generate_rndstrs(ascii_uppercase, 16),
+        generate_rndstrs(ascii_letters + digits, 128)) for _ in range(32)]
 
 
 def accept_client(client_reader, client_writer, cloak, *, loop=None):
@@ -186,13 +194,6 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         req_writer.write(('%s\r\n' % new_head).encode())
         await req_writer.drain()
         await asyncio.sleep(0.2, loop=loop)
-
-        def generate_dummyheaders():
-            def generate_rndstrs(strings, length):
-                return ''.join(random.choice(strings) for _ in range(length))
-            import string
-            return ['X-%s: %s\r\n' % (generate_rndstrs(string.ascii_uppercase, 16),
-                generate_rndstrs(string.ascii_letters + string.digits, 128)) for _ in range(32)]
 
         if cloak:
             req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
