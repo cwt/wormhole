@@ -11,12 +11,12 @@ def readme():
 
 setup(
     name='warp-proxy',
-    version='0.2.0',
-    description='Simple http transparent proxy made in Python 3.4',
+    version='0.2.0-py35',
+    description='Simple http transparent proxy made in Python 3.5',
     long_description=readme(),
-    url='https://github.com/devunt/warp',
-    author='JuneHyeon Bae',
-    author_email='devunt' '@' 'gmail.com',
+    url='https://github.com/bashell-com/warp',
+    author='Chaiwat Suttipongsakul',
+    author_email='cwt' '@' 'bashell.com',
     license='MIT License',
     py_modules=['warp'],
     entry_points='''
@@ -31,8 +31,7 @@ setup(
         'Intended Audience :: End Users/Desktop',
         'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: Implementation :: CPython',
         'Topic :: Internet :: Proxy Servers',
         'Topic :: Internet :: WWW/HTTP',

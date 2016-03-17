@@ -1,7 +1,7 @@
 WARP
 ====
 
-Simple http proxy made in python 3.4
+Simple http proxy made in python 3.5
 
 This is proof-of-concept code.
 
@@ -15,7 +15,7 @@ You should run this proxy in your local computer.
 Dependency
 ----------
 
-* python >= 3.4.0
+* python >= 3.5.0
 
 How to install
 --------------
@@ -30,7 +30,7 @@ Or if you're interested in bleeding edge of the master branch give it a try:
 
 .. code-block:: console
 
-   $ git clone git://github.com.devunt/warp.git
+   $ git clone git@github.com:bashell-com/warp.git
    $ cd warp/
    $ pip install -e .
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.2.0"
+VERSION = "v0.2.0-py35"
 
 """
 Copyright (c) 2013 devunt
@@ -28,8 +28,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import sys
-if sys.version_info < (3, 4):
-    print('Error: You need python 3.4.0 or above.')
+if sys.version_info < (3, 5):
+    print('Error: You need python 3.5.0 or above.')
     exit(1)
 
 from argparse import ArgumentParser
@@ -57,7 +57,7 @@ verbose = 0
 
 def accept_client(client_reader, client_writer, *, loop=None):
     ident = hex(id(client_reader))[-6:]
-    task = asyncio.async(process_warp(client_reader, client_writer, loop=loop), loop=loop)
+    task = asyncio.ensure_future(process_warp(client_reader, client_writer, loop=loop), loop=loop)
     clients[task] = (client_reader, client_writer)
     started_time = time()
 
@@ -70,8 +70,7 @@ def accept_client(client_reader, client_writer, *, loop=None):
     task.add_done_callback(client_done)
 
 
-@asyncio.coroutine
-def process_warp(client_reader, client_writer, *, loop=None):
+async def process_warp(client_reader, client_writer, *, loop=None):
     ident = str(hex(id(client_reader)))[-6:]
     header = ''
     payload = b''
@@ -79,12 +78,12 @@ def process_warp(client_reader, client_writer, *, loop=None):
         RECV_MAX_RETRY = 3
         recvRetry = 0
         while True:
-            line = yield from client_reader.readline()
+            line = await client_reader.readline()
             if not line:
                 if len(header) == 0 and recvRetry < RECV_MAX_RETRY:
                     # handle the case when the client make connection but sending data is delayed for some reasons
                     recvRetry += 1
-                    yield from asyncio.sleep(0.2, loop=loop)
+                    await asyncio.sleep(0.2, loop=loop)
                     continue
                 else:
                     break
@@ -97,7 +96,7 @@ def process_warp(client_reader, client_writer, *, loop=None):
         if m:
             cl = int(m.group(1))
             while (len(payload) < cl):
-                payload += yield from client_reader.read(1024)
+                payload += await client_reader.read(1024)
     except:
         print_exc()
 
@@ -117,23 +116,22 @@ def process_warp(client_reader, client_writer, *, loop=None):
             m = REGEX_HOST.search(head[1])
             host = m.group(1)
             port = int(m.group(2))
-            req_reader, req_writer = yield from asyncio.open_connection(host, port, ssl=False, loop=loop)
+            req_reader, req_writer = await asyncio.open_connection(host, port, ssl=False, loop=loop)
             client_writer.write(b'HTTP/1.1 200 Connection established\r\n\r\n')
-            @asyncio.coroutine
-            def relay_stream(reader, writer):
+            async def relay_stream(reader, writer):
                 try:
                     while True:
-                        line = yield from reader.read(1024)
+                        line = await reader.read(1024)
                         if len(line) == 0:
                             break
                         writer.write(line)
                 except:
                     print_exc()
             tasks = [
-                asyncio.async(relay_stream(client_reader, req_writer), loop=loop),
-                asyncio.async(relay_stream(req_reader, client_writer), loop=loop),
+                asyncio.ensure_future(relay_stream(client_reader, req_writer), loop=loop),
+                asyncio.ensure_future(relay_stream(req_reader, client_writer), loop=loop),
             ]
-            yield from asyncio.wait(tasks, loop=loop)
+            await asyncio.wait(tasks, loop=loop)
         except:
             print_exc()
         finally:
@@ -184,10 +182,10 @@ def process_warp(client_reader, client_writer, *, loop=None):
         port = 80
 
     try:
-        req_reader, req_writer = yield from asyncio.open_connection(host, port, flags=TCP_NODELAY, loop=loop)
+        req_reader, req_writer = await asyncio.open_connection(host, port, flags=TCP_NODELAY, loop=loop)
         req_writer.write(('%s\r\n' % new_head).encode())
-        yield from req_writer.drain()
-        yield from asyncio.sleep(0.2, loop=loop)
+        await req_writer.drain()
+        await asyncio.sleep(0.2, loop=loop)
 
         def generate_dummyheaders():
             def generate_rndstrs(strings, length):
@@ -197,10 +195,10 @@ def process_warp(client_reader, client_writer, *, loop=None):
                 generate_rndstrs(string.ascii_letters + string.digits, 128)) for _ in range(32)]
 
         req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
-        yield from req_writer.drain()
+        await req_writer.drain()
 
         req_writer.write(b'Host: ')
-        yield from req_writer.drain()
+        await req_writer.drain()
         def feed_phost(phost):
             i = 1
             while phost:
@@ -208,20 +206,20 @@ def process_warp(client_reader, client_writer, *, loop=None):
                 phost = phost[i:]
                 i = random.randrange(2, 5)
         for delay, c in feed_phost(phost):
-            yield from asyncio.sleep(delay / 10.0, loop=loop)
+            await asyncio.sleep(delay / 10.0, loop=loop)
             req_writer.write(c.encode())
-            yield from req_writer.drain()
+            await req_writer.drain()
         req_writer.write(b'\r\n')
         req_writer.writelines(list(map(lambda x: (x + '\r\n').encode(), sreq)))
         req_writer.write(b'\r\n')
         if payload != b'':
             req_writer.write(payload)
             req_writer.write(b'\r\n')
-        yield from req_writer.drain()
+        await req_writer.drain()
 
         try:
             while True:
-                buf = yield from req_reader.read(1024)
+                buf = await req_reader.read(1024)
                 if len(buf) == 0:
                     break
                 client_writer.write(buf)
@@ -234,11 +232,10 @@ def process_warp(client_reader, client_writer, *, loop=None):
     client_writer.close()
 
 
-@asyncio.coroutine
-def start_warp_server(host, port, *, loop = None):
+async def start_warp_server(host, port, *, loop = None):
     try:
         accept = functools.partial(accept_client, loop=loop)
-        server = yield from asyncio.start_server(accept, host=host, port=port, loop=loop)
+        server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
     except OSError as ex:
         logger.critical('!!! Failed to bind server at [%s:%d]: %s' % (host, port, ex.args[1]))
         raise
