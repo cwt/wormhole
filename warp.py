@@ -112,7 +112,7 @@ def process_warp(client_reader, client_writer, *, loop=None):
     head = req[0].split(' ')
     if head[0] == 'CONNECT': # https proxy
         try:
-            logger.info('%sBYPASSING <%s %s> (SSL connection)' % 
+            logger.info('%sBYPASSING <%s %s> (SSL connection)' %
                 ('[%s] ' % ident if verbose >= 1 else '', head[0], head[1]))
             m = REGEX_HOST.search(head[1])
             host = m.group(1)
@@ -153,7 +153,7 @@ def process_warp(client_reader, client_writer, *, loop=None):
         elif headerName.lower() == "connection":
             if headerValue.lower() in ('keep-alive', 'persist'):
                 # current version of this program does not support the HTTP keep-alive feature
-                sreq.append("Connection: close")    
+                sreq.append("Connection: close")
             else:
                 sreq.append(line)
         elif headerName.lower() != 'proxy-connection':
@@ -193,7 +193,7 @@ def process_warp(client_reader, client_writer, *, loop=None):
             def generate_rndstrs(strings, length):
                 return ''.join(random.choice(strings) for _ in range(length))
             import string
-            return ['X-%s: %s\r\n' % (generate_rndstrs(string.ascii_uppercase, 16), 
+            return ['X-%s: %s\r\n' % (generate_rndstrs(string.ascii_uppercase, 16),
                 generate_rndstrs(string.ascii_letters + string.digits, 128)) for _ in range(32)]
 
         req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
@@ -238,7 +238,7 @@ def process_warp(client_reader, client_writer, *, loop=None):
 def start_warp_server(host, port, *, loop = None):
     try:
         accept = functools.partial(accept_client, loop=loop)
-        server = yield from asyncio.start_server(accept, host=host, port=port, loop=loop) 
+        server = yield from asyncio.start_server(accept, host=host, port=port, loop=loop)
     except OSError as ex:
         logger.critical('!!! Failed to bind server at [%s:%d]: %s' % (host, port, ex.args[1]))
         raise
