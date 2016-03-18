@@ -1,5 +1,6 @@
 WARP
 ====
+*(forked from https://github.com/devunt/warp)*
 
 Simple http proxy made in python 3.5
 
@@ -24,13 +25,13 @@ You can install **warp** using ``pip``:
 
 .. code-block:: console
 
-   $ pip install warp-proxy
+   $ pip install hg+https://bitbucket.org/bashell-com/warp
 
 Or if you're interested in bleeding edge of the master branch give it a try:
 
 .. code-block:: console
 
-   $ git clone git@github.com:bashell-com/warp.git
+   $ hg clone https://bitbucket.org/bashell-com/warp
    $ cd warp/
    $ pip install -e .
 
@@ -82,6 +83,7 @@ Notice
 Special thanks to
 -----------------
 
+* **Junehyeon Bae (https://github.com/devunt) owner of the original project.**
 * peecky (https://github.com/peecky) for lots of improvement code contributes.
 * Young-Ho Cha (https://github.com/ycha) for randomize feed hostname code.
 * Hong Minhee (https://github.com/dahlia) for python syntax and optparse implementaion.
