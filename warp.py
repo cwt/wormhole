@@ -79,9 +79,11 @@ def accept_client(client_reader, client_writer, cloak, *, loop=None):
 
 
 async def process_warp(client_reader, client_writer, cloak, *, loop=None):
-    ident = str(hex(id(client_reader)))[-6:]
+    #ident = str(hex(id(client_reader)))[-6:]
+    ident = '%s:%s' % client_writer.get_extra_info('peername')
     header = ''
     payload = b''
+    response_status = None
     try:
         RECV_MAX_RETRY = 3
         recvRetry = 0
@@ -177,7 +179,6 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         phost = '127.0.0.1'
     path = head[1][len(phost)+7:]
 
-    logger.info('%sWARPING <%s %s>' % ('[%s] ' % ident if verbose >= 1 else '', head[0], head[1]))
 
     new_head = ' '.join([head[0], path, head[2]])
 
@@ -222,6 +223,8 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         try:
             while True:
                 buf = await req_reader.read(1024)
+                if response_status is None:
+                    response_status = buf[:buf.find(b'\r\n')]
                 if len(buf) == 0:
                     break
                 client_writer.write(buf)
@@ -231,6 +234,8 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
     except:
         print_exc()
 
+    logger.info('%s %s %s %s' % ('[%s]' % ident, head[0], head[1],
+        response_status.decode('ascii')))
     client_writer.close()
 
 
