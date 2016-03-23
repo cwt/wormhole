@@ -50,7 +50,7 @@ REGEX_CONNECTION     = re.compile(r'\r\nConnection: (.+)\r\n', re.IGNORECASE)
 
 clients = {}
 
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] {%(levelname)s} %(message)s')
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 logger = logging.getLogger('warp')
 verbose = 0
@@ -64,7 +64,8 @@ def generate_dummyheaders():
 
 
 def accept_client(client_reader, client_writer, cloak, *, loop=None):
-    ident = hex(id(client_reader))[-6:]
+    ident = '%s %s' % (hex(id(client_reader))[-6:],
+                       client_writer.get_extra_info('peername')[0])
     task = asyncio.ensure_future(process_warp(client_reader, client_writer, cloak, loop=loop), loop=loop)
     clients[task] = (client_reader, client_writer)
     started_time = time()
@@ -77,13 +78,10 @@ def accept_client(client_reader, client_writer, cloak, *, loop=None):
     logger.debug('[%s] Connection started' % ident)
     task.add_done_callback(client_done)
 
-
-async def process_warp(client_reader, client_writer, cloak, *, loop=None):
-    #ident = str(hex(id(client_reader)))[-6:]
-    ident = '%s:%s' % client_writer.get_extra_info('peername')
+async def process_request(client_reader, ident, loop):
     header = ''
     payload = b''
-    response_status = None
+
     try:
         RECV_MAX_RETRY = 3
         recvRetry = 0
@@ -107,45 +105,61 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
             cl = int(m.group(1))
             while (len(payload) < cl):
                 payload += await client_reader.read(1024)
+    except Exception as e:
+        logger.debug('%s !!! Task reject (%s)' % (ident, e))
+
+    return header, payload
+
+
+async def process_ssl(client_reader, client_writer, head, ident, loop):
+    m = REGEX_HOST.search(head[1])
+    host = m.group(1)
+    port = int(m.group(2))
+    if port == 443:
+        url = 'https://%s/' % host
+    else:
+        url = 'https://%s:%s/' % (host, port)
+    try:
+        logger.info('%s %s 200 %s' % (ident, head[0], url))
+        req_reader, req_writer = await asyncio.open_connection(host, port, ssl=False, loop=loop)
+        client_writer.write(b'HTTP/1.1 200 Connection established\r\n\r\n')
+        async def relay_stream(reader, writer):
+            try:
+                while True:
+                    line = await reader.read(1024)
+                    if len(line) == 0:
+                        break
+                    writer.write(line)
+            except:
+                logger.info('%s %s 502 %s' % (ident, head[0], url))
+        tasks = [
+            asyncio.ensure_future(relay_stream(client_reader, req_writer), loop=loop),
+            asyncio.ensure_future(relay_stream(req_reader, client_writer), loop=loop),
+        ]
+        await asyncio.wait(tasks, loop=loop)
     except:
-        print_exc()
+        logger.info('%s %s 502 %s' % (ident, head[0], url))
+
+
+async def process_warp(client_reader, client_writer, cloak, *, loop=None):
+    ident = '%s %s' % (hex(id(client_reader))[-6:],
+                       client_writer.get_extra_info('peername')[0])
+
+    header, payload = await process_request(client_reader, ident, loop)
 
     if len(header) == 0:
-        logger.debug('[%s] !!! Task reject (empty request)' % ident)
+        logger.debug('%s !!! Task reject (empty request)' % ident)
         return
 
     req = header.split('\r\n')[:-1]
     if len(req) < 4:
-        logger.debug('[%s] !!! Task reject (invalid request)' % ident)
+        logger.debug('%s !!! Task reject (invalid request)' % ident)
         return
+
     head = req[0].split(' ')
     if head[0] == 'CONNECT': # https proxy
-        try:
-            logger.info('%sBYPASSING <%s %s> (SSL connection)' %
-                ('[%s] ' % ident if verbose >= 1 else '', head[0], head[1]))
-            m = REGEX_HOST.search(head[1])
-            host = m.group(1)
-            port = int(m.group(2))
-            req_reader, req_writer = await asyncio.open_connection(host, port, ssl=False, loop=loop)
-            client_writer.write(b'HTTP/1.1 200 Connection established\r\n\r\n')
-            async def relay_stream(reader, writer):
-                try:
-                    while True:
-                        line = await reader.read(1024)
-                        if len(line) == 0:
-                            break
-                        writer.write(line)
-                except:
-                    print_exc()
-            tasks = [
-                asyncio.ensure_future(relay_stream(client_reader, req_writer), loop=loop),
-                asyncio.ensure_future(relay_stream(req_reader, client_writer), loop=loop),
-            ]
-            await asyncio.wait(tasks, loop=loop)
-        except:
-            print_exc()
-        finally:
-            return
+        return await process_ssl(client_reader, client_writer, head, ident, loop)
+
     phost = False
     sreq = []
     sreqHeaderEndIndex = 0
@@ -179,7 +193,6 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         phost = '127.0.0.1'
     path = head[1][len(phost)+7:]
 
-
     new_head = ' '.join([head[0], path, head[2]])
 
     m = REGEX_HOST.search(phost)
@@ -190,6 +203,8 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         host = phost
         port = 80
 
+    response_status = None
+    response_code = None
     try:
         req_reader, req_writer = await asyncio.open_connection(host, port, flags=TCP_NODELAY, loop=loop)
         req_writer.write(('%s\r\n' % new_head).encode())
@@ -229,14 +244,13 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
                     break
                 client_writer.write(buf)
         except:
-            print_exc()
-
+            response_code = '502'
     except:
-        print_exc()
+        response_code = '502'
 
-    logger.info('%s %s %s %s' % ('[%s]' % ident, head[0], head[1],
-        response_status.decode('ascii')))
-    client_writer.close()
+    if response_code is None:
+        response_code = response_status.decode('ascii').split(' ')[1]
+    logger.info('%s %s %s %s' % (ident, head[0], response_code, head[1]))
 
 
 async def start_warp_server(host, port, cloak, *, loop = None):
