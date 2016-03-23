@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from pip._vendor.requests.auth import HTTPProxyAuth
 
 VERSION = "v0.2.0-py35"
 
@@ -37,6 +38,7 @@ from string import ascii_letters, ascii_uppercase, digits
 from socket import TCP_NODELAY
 from time import time
 import asyncio
+import base64
 import logging
 import random
 import functools
@@ -62,10 +64,10 @@ def generate_dummyheaders():
         generate_rndstrs(ascii_letters + digits, 128)) for _ in range(32)]
 
 
-def accept_client(client_reader, client_writer, cloak, *, loop=None):
+def accept_client(client_reader, client_writer, cloak, auth, *, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
-    task = asyncio.ensure_future(process_warp(client_reader, client_writer, cloak, loop=loop), loop=loop)
+    task = asyncio.ensure_future(process_warp(client_reader, client_writer, cloak, auth, loop=loop), loop=loop)
     clients[task] = (client_reader, client_writer)
     started_time = time()
 
@@ -140,7 +142,45 @@ async def process_ssl(client_reader, client_writer, head, ident, loop):
         logger.info('%s %s 502 %s' % (ident, head[0], url))
 
 
-async def process_warp(client_reader, client_writer, cloak, *, loop=None):
+def auth_denied(client_writer, head, ident):
+    client_writer.write(b'HTTP/1.1 407 Proxy Authentication Required\r\n')
+    client_writer.write(b'Proxy-Authenticate: Basic realm="Warp Proxy"\r\n')
+    if head[0] == 'CONNECT':
+        host, port = head[1].split(':')
+        if port == '443':
+            url = 'https://%s/' % host
+        else:
+            url = 'https://%s:%s/' % (host, port)
+    else:
+        url = head[1]
+    logger.info('%s %s 407 %s' % (ident, head[0], url))
+    raise Exception('HTTP/1.1 407 Proxy Authentication Required')
+
+
+AUTH_LIST = None
+async def check_auth(client_writer, head, ident, auth, req):
+    proxy_auth = [req_line for req_line in req
+                  if req_line.lower().startswith('proxy-authorization:')]
+    if len(proxy_auth) == 0:
+        return auth_denied(client_writer, head, ident)
+    else:
+        global AUTH_LIST
+        if AUTH_LIST is None:
+            AUTH_LIST = [
+                line.strip()
+                for line in open('warp.passwd','r').readlines()
+                if line.strip() and not line.strip().startswith('#')
+            ]
+        user_password = base64.decodebytes(
+            proxy_auth[0].split(' ')[2].encode('ascii')
+        ).decode('ascii')
+        if user_password not in AUTH_LIST:
+            return auth_denied(client_writer, head, ident)
+        user = user_password.split(':')[0]
+        return ident.replace(' ', ' %s@' % user)
+ 
+
+async def process_warp(client_reader, client_writer, cloak, auth, *, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
 
@@ -156,6 +196,11 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
         return
 
     head = req[0].split(' ')
+    if auth:
+        try:
+            ident = await check_auth(client_writer, head, ident, auth, req)
+        except:
+            return
     if head[0] == 'CONNECT': # https proxy
         return await process_ssl(client_reader, client_writer, head, ident, loop)
 
@@ -252,9 +297,9 @@ async def process_warp(client_reader, client_writer, cloak, *, loop=None):
     logger.info('%s %s %s %s' % (ident, head[0], response_code, head[1]))
 
 
-async def start_warp_server(host, port, cloak, *, loop = None):
+async def start_warp_server(host, port, cloak, auth, *, loop = None):
     try:
-        accept = functools.partial(accept_client, cloak=cloak, loop=loop)
+        accept = functools.partial(accept_client, cloak=cloak, auth=auth, loop=loop)
         server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
     except OSError as ex:
         logger.critical('!!! Failed to bind server at [%s:%d]: %s' % (host, port, ex.args[1]))
@@ -271,13 +316,15 @@ def main():
     """
     parser = ArgumentParser(description='Simple HTTP transparent proxy')
     parser.add_argument('-H', '--host', default='127.0.0.1',
-                      help='Host to listen [default: %(default)s]')
+        help='Host to listen [default: %(default)s]')
     parser.add_argument('-p', '--port', type=int, default=8800,
-                      help='Port to listen [default: %(default)d]')
+        help='Port to listen [default: %(default)d]')
+    parser.add_argument('-a', '--auth', default='',
+        help='File contains username and password list for proxy authentication [default: no auth]')
     parser.add_argument('-c', '--cloak', action='store_true', default=False,
-                      help='Add random string to header [default: %(default)s]')
+        help='Add random string to header [default: %(default)s]')
     parser.add_argument('-v', '--verbose', action='count', default=0,
-                      help='Print verbose')
+        help='Print verbose')
     args = parser.parse_args()
     if not (1 <= args.port <= 65535):
         parser.error('port must be 1-65535')
@@ -292,7 +339,7 @@ def main():
     verbose = args.verbose
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start_warp_server(args.host, args.port, args.cloak))
+        loop.run_until_complete(start_warp_server(args.host, args.port, args.cloak, args.auth))
         loop.run_forever()
     except OSError:
         pass
