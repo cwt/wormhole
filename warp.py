@@ -79,6 +79,7 @@ def accept_client(client_reader, client_writer, cloak, auth, *, loop=None):
     logger.debug('[%s] Connection started' % ident)
     task.add_done_callback(client_done)
 
+
 async def process_request(client_reader, ident, loop):
     header = ''
     payload = b''
@@ -145,6 +146,7 @@ async def process_ssl(client_reader, client_writer, head, ident, loop):
 def auth_denied(client_writer, head, ident):
     client_writer.write(b'HTTP/1.1 407 Proxy Authentication Required\r\n')
     client_writer.write(b'Proxy-Authenticate: Basic realm="Warp Proxy"\r\n')
+    client_writer.write(b'\r\n')
     if head[0] == 'CONNECT':
         host, port = head[1].split(':')
         if port == '443':
@@ -154,11 +156,10 @@ def auth_denied(client_writer, head, ident):
     else:
         url = head[1]
     logger.info('%s %s 407 %s' % (ident, head[0], url))
-    raise Exception('HTTP/1.1 407 Proxy Authentication Required')
 
 
 AUTH_LIST = None
-async def check_auth(client_writer, head, ident, auth, req):
+async def check_auth(client_writer, head, ident, req):
     proxy_auth = [req_line for req_line in req
                   if req_line.lower().startswith('proxy-authorization:')]
     if len(proxy_auth) == 0:
@@ -196,11 +197,12 @@ async def process_warp(client_reader, client_writer, cloak, auth, *, loop=None):
         return
 
     head = req[0].split(' ')
+
     if auth:
-        try:
-            ident = await check_auth(client_writer, head, ident, auth, req)
-        except:
+        ident = await check_auth(client_writer, head, ident, req)
+        if ident is None:
             return
+
     if head[0] == 'CONNECT': # https proxy
         return await process_ssl(client_reader, client_writer, head, ident, loop)
 
