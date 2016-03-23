@@ -36,7 +36,6 @@ from argparse import ArgumentParser
 from string import ascii_letters, ascii_uppercase, digits
 from socket import TCP_NODELAY
 from time import time
-from traceback import print_exc
 import asyncio
 import logging
 import random
