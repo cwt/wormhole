@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 from pip._vendor.requests.auth import HTTPProxyAuth
 
-VERSION = "v0.2.0-py35"
+VERSION = "v0.9"
 
 """
+Copyright (c) 2016 cwt
 Copyright (c) 2013 devunt
 
 Permission is hereby granted, free of charge, to any person
@@ -53,7 +54,7 @@ clients = {}
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
-logger = logging.getLogger('warp')
+logger = logging.getLogger('wormhole')
 verbose = 0
 
 
@@ -67,7 +68,7 @@ def generate_dummyheaders():
 def accept_client(client_reader, client_writer, cloak, auth, *, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
-    task = asyncio.ensure_future(process_warp(client_reader, client_writer, cloak, auth, loop=loop), loop=loop)
+    task = asyncio.ensure_future(process_wormhole(client_reader, client_writer, cloak, auth, loop=loop), loop=loop)
     clients[task] = (client_reader, client_writer)
     started_time = time()
 
@@ -159,7 +160,7 @@ def auth_denied(client_writer, head, ident):
 
 
 AUTH_LIST = None
-async def check_auth(client_writer, head, ident, req):
+async def check_auth(client_writer, head, ident, req, auth):
     proxy_auth = [req_line for req_line in req
                   if req_line.lower().startswith('proxy-authorization:')]
     if len(proxy_auth) == 0:
@@ -169,7 +170,7 @@ async def check_auth(client_writer, head, ident, req):
         if AUTH_LIST is None:
             AUTH_LIST = [
                 line.strip()
-                for line in open('warp.passwd','r').readlines()
+                for line in open(auth,'r').readlines()
                 if line.strip() and not line.strip().startswith('#')
             ]
         user_password = base64.decodebytes(
@@ -179,9 +180,9 @@ async def check_auth(client_writer, head, ident, req):
             return auth_denied(client_writer, head, ident)
         user = user_password.split(':')[0]
         return ident.replace(' ', ' %s@' % user)
- 
 
-async def process_warp(client_reader, client_writer, cloak, auth, *, loop=None):
+
+async def process_wormhole(client_reader, client_writer, cloak, auth, *, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
 
@@ -199,7 +200,7 @@ async def process_warp(client_reader, client_writer, cloak, auth, *, loop=None):
     head = req[0].split(' ')
 
     if auth:
-        ident = await check_auth(client_writer, head, ident, req)
+        ident = await check_auth(client_writer, head, ident, req, auth)
         if ident is None:
             return
 
@@ -299,7 +300,7 @@ async def process_warp(client_reader, client_writer, cloak, auth, *, loop=None):
     logger.info('%s %s %s %s' % (ident, head[0], response_code, head[1]))
 
 
-async def start_warp_server(host, port, cloak, auth, *, loop = None):
+async def start_wormhole_server(host, port, cloak, auth, *, loop = None):
     try:
         accept = functools.partial(accept_client, cloak=cloak, auth=auth, loop=loop)
         server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
@@ -316,7 +317,7 @@ def main():
     port and provides `--help` message.
 
     """
-    parser = ArgumentParser(description='Simple HTTP transparent proxy')
+    parser = ArgumentParser(description='Asynchronous IO HTTP and HTTPS Proxy')
     parser.add_argument('-H', '--host', default='127.0.0.1',
         help='Host to listen [default: %(default)s]')
     parser.add_argument('-p', '--port', type=int, default=8800,
@@ -335,13 +336,13 @@ def main():
     if args.verbose >= 1:
         logger.setLevel(logging.DEBUG)
     if args.verbose >= 2:
-        logging.getLogger('warp').setLevel(logging.DEBUG)
+        logging.getLogger('wormhole').setLevel(logging.DEBUG)
         logging.getLogger('asyncio').setLevel(logging.DEBUG)
     global verbose
     verbose = args.verbose
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start_warp_server(args.host, args.port, args.cloak, args.auth))
+        loop.run_until_complete(start_wormhole_server(args.host, args.port, args.cloak, args.auth))
         loop.run_forever()
     except OSError:
         pass

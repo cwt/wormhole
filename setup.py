@@ -10,25 +10,25 @@ def readme():
 
 
 setup(
-    name='warp-proxy',
-    version='0.2.0-py35',
-    description='Simple http transparent proxy made in Python 3.5',
+    name='wormhole',
+    version='0.9',
+    description='Asynchronous IO HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
-    url='https://github.com/bashell-com/warp',
+    url='https://github.com/bashell-com/wormhole',
     author='Chaiwat Suttipongsakul',
     author_email='cwt' '@' 'bashell.com',
     license='MIT License',
-    py_modules=['warp'],
+    py_modules=['wormhole'],
     entry_points='''
         [console_scripts]
-        warp = warp:main
+        wormhole = wormhole:main
     ''',  # for setuptools
-    scripts=['warp.py'],  # for distutils without setuptools
+    scripts=['wormhole.py'],  # for distutils without setuptools
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Environment :: Console',
         'Environment :: Web Environment',
-        'Intended Audience :: End Users/Desktop',
+        'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX',
         'Programming Language :: Python :: 3.5',
