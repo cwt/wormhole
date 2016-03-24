@@ -1,21 +1,22 @@
 Wormhole
 ========
 
-\*(forked from <https://github.com/devunt/warp)*>
+*(forked from [https://github.com/devunt/warp](https://github.com/devunt/warp))*
 
 Asynchronous IO HTTP and HTTPS Proxy on Python 3.5
 
 Dependency
 ----------
 
--   python &gt;= 3.5.0
+*  python >= 3.5.0
+
 
 Docker Image Usage
 ------------------
 
 Run without authentication
 
-``` bash
+```bash
 $ docker pull bashell/wormhole
 $ docker run -d -p 8800:8800 bashell/wormhole
 ```
@@ -28,7 +29,7 @@ Run with authentication
 -   Link that directory to the container via option `-v` and also run
     wormhole container with option `-a /path/to/authentication_file`
 
-``` bash
+```bash
 $ docker pull bashell/wormhole
 $ mkdir -p /path/to/dir
 $ echo "user1:password1" > /path/to/dir/wormhole.passwd
@@ -37,30 +38,32 @@ $ docker run -d -v /path/to/dir:/opt/wormhole \
   -a /opt/wormhole/wormhole.passwd
 ```
 
+
 How to install
 --------------
 
 You can install **wormhole** using `pip`:
 
-``` bash
+```bash
 $ pip install hg+https://bitbucket.org/bashell-com/wormhole
 ```
 
 Or install from your local clone:
 
-``` bash
+```bash
 $ hg clone https://bitbucket.org/bashell-com/wormhole
 $ cd warp/
 $ pip install -e .
 ```
+
 
 How to use
 ----------
 
 1.  run `wormhole` command (or you might need to run `wormhole.py`
     instead if setuptools isn't installed in your system)
-
-    ``` {.sourceCode .console}
+    
+    ```
     $ wormhole
     ```
 
@@ -70,25 +73,26 @@ How to use
 
     :   host: 127.0.0.1 port: 8800
 
+
 Command help
 ------------
 
-``` bash
+```bash
 $ python wormhole.py --help
 ```
+
 
 License
 -------
 
 MIT License (included in `wormhole.py`)
 
+
 Notice
 ------
 
-1.  may not work in
+*  may not work in
     -   some ISPs
     -   some company firewalls
     -   some school firewalls
     -   some browers (will be fixed later)
-
-
