@@ -317,7 +317,7 @@ def main():
 
     """
     parser = ArgumentParser(description='Asynchronous IO HTTP and HTTPS Proxy')
-    parser.add_argument('-H', '--host', default='127.0.0.1',
+    parser.add_argument('-H', '--host', default='0.0.0.0',
         help='Host to listen [default: %(default)s]')
     parser.add_argument('-p', '--port', type=int, default=8800,
         help='Port to listen [default: %(default)d]')
