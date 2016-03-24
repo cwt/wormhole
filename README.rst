@@ -11,6 +11,32 @@ Dependency
 * python >= 3.5.0
 
 
+Docker Image Usage
+------------------
+
+Run without authentication
+
+.. code-block:: console
+
+   $ docker pull bashell/wormhole
+   $ docker run -d -p 8800:8800 bashell/wormhole
+
+Run with authentication
+
+  - Create an empty directory on your docker host
+  - Create an authentication file contains username and password in this format ``username:password``
+  - Link that directory to the container via option ``-v`` and also run wormhole container with option ``-a /path/to/authentication_file``
+
+.. code-block:: console
+
+   $ docker pull bashell/wormhole
+   $ mkdir -p /path/to/dir
+   $ echo "user1:password1" > /path/to/dir/wormhole.passwd
+   $ docker run -d -v /path/to/dir:/opt/wormhole \
+     -p 8800:8800 bashell/wormhole \
+     -a /opt/wormhole/wormhole.passwd
+
+
 How to install
 --------------
 
