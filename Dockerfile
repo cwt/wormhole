@@ -8,4 +8,3 @@ COPY wormhole.py /usr/bin
 
 EXPOSE     8800/tcp
 ENTRYPOINT ["/usr/bin/python3", "-O", "/usr/bin/wormhole.py"]
-CMD        ["--help"]
