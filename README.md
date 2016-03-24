@@ -52,7 +52,7 @@ Or install from your local clone:
 
 ```bash
 $ hg clone https://bitbucket.org/bashell-com/wormhole
-$ cd warp/
+$ cd wormhole/
 $ pip install -e .
 ```
 
