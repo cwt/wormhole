@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from pip._vendor.requests.auth import HTTPProxyAuth
 
 VERSION = "v0.9"
 
