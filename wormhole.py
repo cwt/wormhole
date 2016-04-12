@@ -181,7 +181,7 @@ async def check_auth(client_writer, head, ident, req, auth):
         return ident.replace(' ', ' %s@' % user)
 
 
-async def process_wormhole(client_reader, client_writer, cloak, auth, *, loop=None):
+async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
 
@@ -299,7 +299,7 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, *, loop=No
     logger.info('%s %s %s %s' % (ident, head[0], response_code, head[1]))
 
 
-async def start_wormhole_server(host, port, cloak, auth, *, loop = None):
+async def start_wormhole_server(host, port, cloak, auth, loop = None):
     try:
         accept = functools.partial(accept_client, cloak=cloak, auth=auth, loop=loop)
         server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
