@@ -93,7 +93,7 @@ async def process_request(client_reader, ident, loop):
                 if len(header) == 0 and recvRetry < RECV_MAX_RETRY:
                     # handle the case when the client make connection but sending data is delayed for some reasons
                     recvRetry += 1
-                    await asyncio.sleep(0.2, loop=loop)
+                    await asyncio.sleep(0.1, loop=loop)
                     continue
                 else:
                     break
@@ -255,7 +255,7 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
         req_reader, req_writer = await asyncio.open_connection(host, port, flags=TCP_NODELAY, loop=loop)
         req_writer.write(('%s\r\n' % new_head).encode())
         await req_writer.drain()
-        await asyncio.sleep(0.2, loop=loop)
+        await asyncio.sleep(0.01, loop=loop)
 
         if cloak:
             req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
@@ -270,7 +270,7 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
                 phost = phost[i:]
                 i = random.randrange(2, 5)
         for delay, c in feed_phost(phost):
-            await asyncio.sleep(delay / 10.0, loop=loop)
+            await asyncio.sleep(delay / 1000.0, loop=loop)
             req_writer.write(c.encode())
             await req_writer.drain()
         req_writer.write(b'\r\n')
