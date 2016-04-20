@@ -64,7 +64,7 @@ def generate_dummyheaders():
         generate_rndstrs(ascii_letters + digits, 128)) for _ in range(32)]
 
 
-def accept_client(client_reader, client_writer, cloak, auth, *, loop=None):
+def accept_client(client_reader, client_writer, cloak, auth, loop=None):
     ident = '%s %s' % (hex(id(client_reader))[-6:],
                        client_writer.get_extra_info('peername')[0])
     task = asyncio.ensure_future(process_wormhole(client_reader, client_writer, cloak, auth, loop=loop), loop=loop)
