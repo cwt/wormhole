@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v1.2"
+VERSION = "v1.3"
 
 """
 Copyright (c) 2016 cwt
@@ -45,48 +45,36 @@ import functools
 import re
 
 
-REGEX_HOST           = re.compile(r'(.+?):([0-9]{1,5})')
-REGEX_CONTENT_LENGTH = re.compile(r'\r\nContent-Length: ([0-9]+)\r\n', re.IGNORECASE)
-REGEX_CONNECTION     = re.compile(r'\r\nConnection: (.+)\r\n', re.IGNORECASE)
+REGEX_HOST = re.compile(r'(.+?):([0-9]{1,5})')
+REGEX_CONTENT_LENGTH = re.compile(r'\r\nContent-Length: ([0-9]+)\r\n',
+                                  re.IGNORECASE)
+REGEX_CONNECTION = re.compile(r'\r\nConnection: (.+)\r\n', re.IGNORECASE)
 
-clients = {}
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(name)s[%(process)d]: [%(id)s][%(client)s]: %(message)s'
-)
+logging.basicConfig(level=logging.INFO,
+                    format=('%(asctime)s %(name)s[%(process)d]: '
+                            '[%(id)s][%(client)s]: %(message)s'))
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 logger = logging.getLogger('wormhole')
+
+
+clients = {}
 verbose = 0
 
 
 def generate_dummyheaders():
+
     def generate_rndstrs(strings, length):
         return ''.join(random.choice(strings) for _ in range(length))
-    return ['X-%s: %s\r\n' % (generate_rndstrs(ascii_uppercase, 16),
-        generate_rndstrs(ascii_letters + digits, 128)) for _ in range(32)]
 
-
-def accept_client(client_reader, client_writer, cloak, auth, loop=None):
-    ident = {'id':hex(id(client_reader))[-6:],
-             'client':client_writer.get_extra_info('peername')[0]}
-    task = asyncio.ensure_future(process_wormhole(client_reader, client_writer, cloak, auth, loop=loop), loop=loop)
-    clients[task] = (client_reader, client_writer)
-    started_time = time()
-
-    def client_done(task):
-        del clients[task]
-        client_writer.close()
-        logger.debug('Connection closed (%.5f seconds)' % (time() - started_time), extra=ident)
-
-    logger.debug('Connection started', extra=ident)
-    task.add_done_callback(client_done)
+    return ['X-%s: %s\r\n' % (
+        generate_rndstrs(ascii_uppercase, 16),
+        generate_rndstrs(ascii_letters + digits, 128)
+    ) for _ in range(32)]
 
 
 async def process_request(client_reader, ident, loop):
     header = ''
     payload = b''
-
     try:
         RECV_MAX_RETRY = 3
         recvRetry = 0
@@ -94,7 +82,8 @@ async def process_request(client_reader, ident, loop):
             line = await client_reader.readline()
             if not line:
                 if len(header) == 0 and recvRetry < RECV_MAX_RETRY:
-                    # handle the case when the client make connection but sending data is delayed for some reasons
+                    # handle the case when the client make connection but
+                    # sending data is delayed for some reasons
                     recvRetry += 1
                     await asyncio.sleep(0.1, loop=loop)
                     continue
@@ -104,7 +93,6 @@ async def process_request(client_reader, ident, loop):
                 break
             if line != b'':
                 header += line.decode()
-
         m = REGEX_CONTENT_LENGTH.search(header)
         if m:
             cl = int(m.group(1))
@@ -112,7 +100,6 @@ async def process_request(client_reader, ident, loop):
                 payload += await client_reader.read(1024)
     except Exception as e:
         logger.debug('!!! Task reject (%s)' % e, extra=ident)
-
     return header, payload
 
 
@@ -126,8 +113,12 @@ async def process_ssl(client_reader, client_writer, head, ident, loop):
         url = 'https://%s:%s/' % (host, port)
     try:
         logger.info('%s 200 %s' % (head[0], url), extra=ident)
-        req_reader, req_writer = await asyncio.open_connection(host, port, ssl=False, loop=loop)
-        client_writer.write(b'HTTP/1.1 200 Connection established\r\n\r\n')
+        req_reader, req_writer = await asyncio.open_connection(
+            host, port, ssl=False, loop=loop
+        )
+        client_writer.write(b'HTTP/1.1 200 Connection established\r\n')
+        client_writer.write(b'\r\n')
+
         async def relay_stream(reader, writer):
             try:
                 while True:
@@ -137,9 +128,12 @@ async def process_ssl(client_reader, client_writer, head, ident, loop):
                     writer.write(line)
             except:
                 logger.info('%s 502 %s' % (head[0], url), extra=ident)
+
         tasks = [
-            asyncio.ensure_future(relay_stream(client_reader, req_writer), loop=loop),
-            asyncio.ensure_future(relay_stream(req_reader, client_writer), loop=loop),
+            asyncio.ensure_future(
+                relay_stream(client_reader, req_writer), loop=loop),
+            asyncio.ensure_future(
+                relay_stream(req_reader, client_writer), loop=loop),
         ]
         await asyncio.wait(tasks, loop=loop)
     except:
@@ -163,34 +157,32 @@ def auth_denied(client_writer, head, ident):
 
 AUTH_LIST = None
 async def check_auth(client_writer, head, ident, req, auth):
-    proxy_auth = [req_line for req_line in req
+    proxy_auth = [req_line
+                  for req_line in req
                   if req_line.lower().startswith('proxy-authorization:')]
     if len(proxy_auth) == 0:
         return auth_denied(client_writer, head, ident)
     else:
         global AUTH_LIST
         if AUTH_LIST is None:
-            AUTH_LIST = [
-                line.strip()
-                for line in open(auth,'r').readlines()
-                if line.strip() and not line.strip().startswith('#')
-            ]
+            AUTH_LIST = [line.strip()
+                         for line in open(auth, 'r').readlines()
+                         if line.strip() and not line.strip().startswith('#')]
         user_password = base64.decodebytes(
             proxy_auth[0].split(' ')[2].encode('ascii')
         ).decode('ascii')
         if user_password not in AUTH_LIST:
             return auth_denied(client_writer, head, ident)
         user = user_password.split(':')[0]
-        return {'id':ident['id'],
-                'client':'%s@%s' % (user, ident['client'])}
+        return {'id': ident['id'],
+                'client': '%s@%s' % (user, ident['client'])}
 
 
-async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None):
-    ident = {'id':hex(id(client_reader))[-6:],
-             'client':client_writer.get_extra_info('peername')[0]}
+async def process_wormhole(client_reader, client_writer, cloak, auth, loop):
+    ident = {'id': hex(id(client_reader))[-6:],
+             'client': client_writer.get_extra_info('peername')[0]}
 
     header, payload = await process_request(client_reader, ident, loop)
-
     if len(header) == 0:
         logger.debug('!!! Task reject (empty request)', extra=ident)
         return
@@ -201,20 +193,23 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
         return
 
     head = req[0].split(' ')
-
     if auth:
         ident = await check_auth(client_writer, head, ident, req, auth)
         if ident is None:
             return
 
-    if head[0] == 'CONNECT': # https proxy
-        return await process_ssl(client_reader, client_writer, head, ident, loop)
+    if head[0] == 'CONNECT':  # https proxy
+        return await process_ssl(
+            client_reader, client_writer, head, ident, loop
+        )
 
     phost = False
     sreq = []
     sreqHeaderEndIndex = 0
+
     for line in req[1:]:
         headerNameAndValue = line.split(': ', 1)
+
         if len(headerNameAndValue) == 2:
             headerName, headerValue = headerNameAndValue
         else:
@@ -224,7 +219,8 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
             phost = headerValue
         elif headerName.lower() == "connection":
             if headerValue.lower() in ('keep-alive', 'persist'):
-                # current version of this program does not support the HTTP keep-alive feature
+                # current version of this program does not support the HTTP
+                # keep-alive feature
                 sreq.append("Connection: close")
             else:
                 sreq.append(line)
@@ -232,17 +228,18 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
             sreq.append(line)
             if len(line) == 0 and sreqHeaderEndIndex == 0:
                 sreqHeaderEndIndex = len(sreq) - 1
+
     if sreqHeaderEndIndex == 0:
         sreqHeaderEndIndex = len(sreq)
 
-    m = REGEX_CONNECTION.search(header)
-    if not m:
+    connection_header = REGEX_CONNECTION.search(header)
+    if not connection_header:
         sreq.insert(sreqHeaderEndIndex, "Connection: close")
 
     if not phost:
         phost = '127.0.0.1'
-    path = head[1][len(phost)+7:]
 
+    path = head[1][len(phost) + 7:]
     new_head = ' '.join([head[0], path, head[2]])
 
     m = REGEX_HOST.search(phost)
@@ -256,27 +253,35 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
     response_status = None
     response_code = None
     try:
-        req_reader, req_writer = await asyncio.open_connection(host, port, flags=TCP_NODELAY, loop=loop)
+        req_reader, req_writer = await asyncio.open_connection(
+            host, port, flags=TCP_NODELAY, loop=loop
+        )
         req_writer.write(('%s\r\n' % new_head).encode())
         await req_writer.drain()
         await asyncio.sleep(0.01, loop=loop)
 
         if cloak:
-            req_writer.writelines(list(map(lambda x: x.encode(), generate_dummyheaders())))
+            req_writer.writelines(
+                list(map(lambda x: x.encode(), generate_dummyheaders())))
             await req_writer.drain()
 
-        req_writer.write(b'Host: ')
-        await req_writer.drain()
-        def feed_phost(phost):
-            i = 1
-            while phost:
-                yield random.randrange(2, 4), phost[:i]
-                phost = phost[i:]
-                i = random.randrange(2, 5)
-        for delay, c in feed_phost(phost):
-            await asyncio.sleep(delay / 1000.0, loop=loop)
-            req_writer.write(c.encode())
+            req_writer.write(b'Host: ')
             await req_writer.drain()
+
+            def feed_phost(phost):
+                i = 1
+                while phost:
+                    yield random.randrange(2, 4), phost[:i]
+                    phost = phost[i:]
+                    i = random.randrange(2, 5)
+
+            for delay, c in feed_phost(phost):
+                await asyncio.sleep(delay / 10.0, loop=loop)
+                req_writer.write(c.encode())
+                await req_writer.drain()
+        else:
+            req_writer.write(b'Host: ' + phost.encode())
+
         req_writer.write(b'\r\n')
         req_writer.writelines(list(map(lambda x: (x + '\r\n').encode(), sreq)))
         req_writer.write(b'\r\n')
@@ -303,13 +308,39 @@ async def process_wormhole(client_reader, client_writer, cloak, auth, loop=None)
     logger.info('%s %s %s' % (head[0], response_code, head[1]), extra=ident)
 
 
-async def start_wormhole_server(host, port, cloak, auth, loop = None):
-    ident = {'id':'', 'client':''}
+def accept_client(client_reader, client_writer, cloak, auth, loop):
+    ident = {'id': hex(id(client_reader))[-6:],
+             'client': client_writer.get_extra_info('peername')[0]}
+    task = asyncio.ensure_future(
+        process_wormhole(client_reader, client_writer, cloak, auth, loop),
+        loop=loop
+    )
+    clients[task] = (client_reader, client_writer)
+    started_time = time()
+
+    def client_done(task):
+        del clients[task]
+        client_writer.close()
+        logger.debug(
+            'Connection closed (%.5f seconds)' % (time() - started_time),
+            extra=ident
+        )
+
+    logger.debug('Connection started', extra=ident)
+    task.add_done_callback(client_done)
+
+
+async def start_wormhole_server(host, port, cloak, auth, loop):
+    ident = {'id': '', 'client': ''}
     try:
-        accept = functools.partial(accept_client, cloak=cloak, auth=auth, loop=loop)
-        server = await asyncio.start_server(accept, host=host, port=port, loop=loop)
+        accept = functools.partial(
+            accept_client, cloak=cloak, auth=auth, loop=loop
+        )
+        server = await asyncio.start_server(accept, host, port, loop=loop)
     except OSError as ex:
-        logger.critical('!!! Failed to bind server at [%s:%d]: %s' % (host, port, ex.args[1]), extra=ident)
+        logger.critical(
+            '!!! Failed to bind server at [%s:%d]: %s' %
+            (host, port, ex.args[1]), extra=ident)
         raise
     else:
         logger.info('wormhole bound at %s:%d.' % (host, port), extra=ident)
@@ -319,34 +350,54 @@ async def start_wormhole_server(host, port, cloak, auth, loop = None):
 def main():
     """CLI frontend function.  It takes command line options e.g. host,
     port and provides `--help` message.
-
     """
-    parser = ArgumentParser(description='Asynchronous IO HTTP and HTTPS Proxy')
-    parser.add_argument('-H', '--host', default='0.0.0.0',
-        help='Host to listen [default: %(default)s]')
-    parser.add_argument('-p', '--port', type=int, default=8800,
-        help='Port to listen [default: %(default)d]')
-    parser.add_argument('-a', '--auth', default='',
-        help='File contains username and password list for proxy authentication [default: no auth]')
-    parser.add_argument('-c', '--cloak', action='store_true', default=False,
-        help='Add random string to header [default: %(default)s]')
-    parser.add_argument('-v', '--verbose', action='count', default=0,
-        help='Print verbose')
+    parser = ArgumentParser(
+        description='Wormhole(%s): Asynchronous IO HTTP and HTTPS Proxy' %
+        VERSION)
+    parser.add_argument(
+        '-H', '--host', default='0.0.0.0',
+        help='Host to listen [default: %(default)s]'
+    )
+    parser.add_argument(
+        '-p', '--port', type=int, default=8800,
+        help='Port to listen [default: %(default)d]'
+    )
+    parser.add_argument(
+        '-a', '--auth', default='',
+        help=('File contains username and password list '
+              'for proxy authentication [default: no auth]')
+    )
+    parser.add_argument(
+        '-c', '--cloak', action='store_true', default=False,
+        help='Add random string to header [default: %(default)s]'
+    )
+    parser.add_argument(
+        '-v', '--verbose', action='count', default=0,
+        help='Print verbose'
+    )
     args = parser.parse_args()
     if not (1 <= args.port <= 65535):
         parser.error('port must be 1-65535')
+    # Just do not debug asyncio for now.
+    '''
     if args.verbose >= 3:
         parser.error('verbose level must be 1-2')
-    if args.verbose >= 1:
-        logger.setLevel(logging.DEBUG)
     if args.verbose >= 2:
         logging.getLogger('wormhole').setLevel(logging.DEBUG)
         logging.getLogger('asyncio').setLevel(logging.DEBUG)
+    '''
+    if args.verbose >= 1:
+        logger.setLevel(logging.DEBUG)
+
     global verbose
     verbose = args.verbose
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start_wormhole_server(args.host, args.port, args.cloak, args.auth))
+        loop.run_until_complete(
+            start_wormhole_server(
+                args.host, args.port, args.cloak, args.auth, loop
+            )
+        )
         loop.run_forever()
     except OSError:
         pass
@@ -358,3 +409,4 @@ def main():
 
 if __name__ == '__main__':
     exit(main())
+
