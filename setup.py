@@ -11,7 +11,7 @@ def readme():
 
 setup(
     name='wormhole',
-    version='1.3',
+    version='1.4',
     description='Asynchronous IO HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
     url='https://github.com/bashell-com/wormhole',
