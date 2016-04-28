@@ -38,25 +38,18 @@ def get_auth_list(auth):
     return AUTH_LIST
 
 
-def deny(client_writer, request_method, uri, ident, logger):
-    client_writer.write(b'HTTP/1.1 407 Proxy Authentication Required\r\n')
-    client_writer.write(b'Proxy-Authenticate: Basic realm="Warp Proxy"\r\n')
-    client_writer.write(b'\r\n')
-    if request_method == 'CONNECT':
-        host, port = uri.split(':')
-        if port == '443':
-            url = 'https://%s/' % host
-        else:
-            url = 'https://%s:%s/' % (host, port)
-    else:
-        url = uri
-    logger.info('%s 407 %s' % (request_method, url), extra=ident)
+def deny(client_writer):
+    DENY_MESSAGES = [
+        b'HTTP/1.1 407 Proxy Authentication Required\r\n',
+        b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
+        b'\r\n'
+    ]
+    [client_writer.write(message) for message in DENY_MESSAGES]
 
 
-async def verify(client_writer, request_method, uri, header_fields, auth, ident, logger):
-    proxy_auth = [field
-                  for field in header_fields
-                  if field.lower().startswith('proxy-authorization:')]
+async def verify(client_writer, request_method, uri, headers, auth, ident):
+    proxy_auth = [header for header in headers
+                  if header.lower().startswith('proxy-authorization:')]
     if proxy_auth:
         user_password = decodebytes(
             proxy_auth[0].split(' ')[2].encode('ascii')
@@ -65,4 +58,5 @@ async def verify(client_writer, request_method, uri, header_fields, auth, ident,
             user = user_password.split(':')[0]
             return {'id': ident['id'],
                     'client': '%s@%s' % (user, ident['client'])}
-    return deny(client_writer, request_method, uri, ident, logger)
+    return deny(client_writer)
+

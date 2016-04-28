@@ -28,10 +28,10 @@ import asyncio
 import logging
 import functools
 import re
-from authentication import verify
-from cloaking import cloak
 from socket import TCP_NODELAY
 from time import time
+from wormhole.authentication import verify
+from wormhole.cloaking import cloak
 
 
 REGEX_HOST = re.compile(r'(.+?):([0-9]{1,5})')
@@ -40,8 +40,7 @@ REGEX_CONTENT_LENGTH = re.compile(r'\r\nContent-Length: ([0-9]+)\r\n',
 REGEX_CONNECTION = re.compile(r'\r\nConnection: (.+)\r\n', re.IGNORECASE)
 
 logging.basicConfig(level=logging.INFO,
-                    format=('%(asctime)s %(name)s[%(process)d]: '
-                            '[%(id)s][%(client)s]: %(message)s'))
+                    format=('%(asctime)s %(name)s[%(process)d]: %(message)s'))
 logger = logging.getLogger('wormhole')
 
 clients = {}
@@ -88,7 +87,8 @@ async def process_request(client_reader, ident, loop):
     return request_line, header_fields, payload
 
 
-async def process_https(client_reader, client_writer, request_method, uri, ident, loop):
+async def process_https(client_reader, client_writer,
+                        request_method, uri, ident, loop):
     m = REGEX_HOST.search(uri)
     host = m.group(1)
     port = int(m.group(2))
@@ -97,7 +97,9 @@ async def process_https(client_reader, client_writer, request_method, uri, ident
     else:
         url = 'https://%s:%s/' % (host, port)
     try:
-        logger.info('%s 200 %s' % (request_method, url), extra=ident)
+        logger.info((
+            '[{id}][{client}]: %s 200 %s' % (request_method, url)
+        ).format(**ident))
         req_reader, req_writer = await asyncio.open_connection(
             host, port, ssl=False, loop=loop
         )
@@ -112,7 +114,9 @@ async def process_https(client_reader, client_writer, request_method, uri, ident
                         break
                     writer.write(line)
             except:
-                logger.info('%s 502 %s' % (request_method, url), extra=ident)
+                logger.info((
+                    '[{id}][{client}]: %s 502 %s' % (request_method, url)
+                ).format(**ident))
 
         tasks = [
             asyncio.ensure_future(
@@ -122,10 +126,14 @@ async def process_https(client_reader, client_writer, request_method, uri, ident
         ]
         await asyncio.wait(tasks, loop=loop)
     except:
-        logger.info('%s 502 %s' % (request_method, url), extra=ident)
+        logger.info((
+            '[{id}][{client}]: %s 502 %s' % (request_method, url)
+        ).format(**ident))
 
 
-async def process_http(client_reader, client_writer, request_method, uri, http_version, header_fields, payload, cloaking, ident, loop):
+async def process_http(client_reader, client_writer,
+                       request_method, uri, http_version,
+                       header_fields, payload, cloaking, ident, loop):
     phost = False
     sreq = []
     sreqHeaderEndIndex = 0
@@ -188,10 +196,11 @@ async def process_http(client_reader, client_writer, request_method, uri, http_v
             await cloak(req_writer, phost, loop)
         else:
             req_writer.write(b'Host: ' + phost.encode())
+        req_writer.write(b'\r\n')
 
+        [req_writer.write((header+'\r\n').encode()) for header in sreq]
         req_writer.write(b'\r\n')
-        req_writer.writelines(list(map(lambda x: (x + '\r\n').encode(), sreq)))
-        req_writer.write(b'\r\n')
+
         if payload != b'':
             req_writer.write(payload)
             req_writer.write(b'\r\n')
@@ -212,16 +221,22 @@ async def process_http(client_reader, client_writer, request_method, uri, http_v
 
     if response_code is None:
         response_code = response_status.decode('ascii').split(' ')[1]
-    logger.info('%s %s %s' % (request_method, response_code, uri), extra=ident)
+    logger.info((
+        '[{id}][{client}]: %s %s %s' % (request_method, response_code, uri)
+    ).format(**ident))
 
 
 async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
     ident = {'id': hex(id(client_reader))[-6:],
              'client': client_writer.get_extra_info('peername')[0]}
 
-    request_line, header_fields, payload = await process_request(client_reader, ident, loop)
+    request_line, header_fields, payload = await process_request(
+        client_reader, ident, loop
+    )
     if not request_line:
-        logger.debug('!!! Task reject (empty request)', extra=ident)
+        logger.debug((
+            '[{id}][{client}]: !!! Task reject (empty request)'
+        ).format(**ident))
         return
 
     request_fields = request_line.split(' ')
@@ -231,13 +246,30 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
     elif len(request_fields) == 3:
         request_method, uri, http_version = request_fields
     else:
-        logger.debug('!!! Task reject (invalid request)', extra=ident)
+        logger.debug((
+            '[{id}][{client}]: !!! Task reject (invalid request)'
+        ).format(**ident))
         return
 
     if auth:
-        ident = await verify(client_writer, request_method, uri, header_fields, auth, ident, logger)
-        if ident is None:
+        verified_ident = await verify(
+            client_writer, request_method, uri,
+            header_fields, auth, ident
+        )
+        if verified_ident is None:
+            if request_method == 'CONNECT':
+                host, port = uri.split(':')
+                if port == '443':
+                    url = 'https://%s/' % host
+                else:
+                    url = 'https://%s:%s/' % (host, port)
+            else:
+                url = uri
+            logger.info((
+                '[{id}][{client}]: %s 407 %s' % (request_method, url)
+            ).format(**ident))
             return
+        ident = verified_ident
 
     if request_method == 'CONNECT':  # https proxy
         return await process_https(
@@ -250,7 +282,7 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
             header_fields, payload, cloaking,
             ident, loop
         )
- 
+
 
 def accept_client(client_reader, client_writer, cloaking, auth, loop):
     ident = {'id': hex(id(client_reader))[-6:],
@@ -263,14 +295,20 @@ def accept_client(client_reader, client_writer, cloaking, auth, loop):
     started_time = time()
 
     def client_done(task):
-        del clients[task]
+        try:
+            del clients[task]
+        except:
+            pass
         client_writer.close()
-        logger.debug(
-            'Connection closed (%.5f seconds)' % (time() - started_time),
-            extra=ident
-        )
+        logger.debug((
+            '[{id}][{client}]: Connection closed (%.5f seconds)' % (
+                time() - started_time
+            )
+        ).format(**ident))
 
-    logger.debug('Connection started', extra=ident)
+    logger.debug((
+        '[{id}][{client}]: Connection started'
+    ).format(**ident))
     task.add_done_callback(client_done)
 
 
@@ -284,10 +322,15 @@ async def start_wormhole_server(host, port, cloaking, auth, verbose, loop):
         )
         server = await asyncio.start_server(accept, host, port, loop=loop)
     except OSError as ex:
-        logger.critical(
-            '!!! Failed to bind server at [%s:%d]: %s' %
-            (host, port, ex.args[1]), extra=ident)
+        logger.critical((
+            '[{id}][{client}]: !!! Failed to bind server at [%s:%d]: %s' % (
+                host, port, ex.args[1]
+            )
+        ).format(**ident))
         raise
     else:
-        logger.info('wormhole bound at %s:%d.' % (host, port), extra=ident)
+        logger.info((
+            '[{id}][{client}]: wormhole bound at %s:%d.' % (host, port)
+        ).format(**ident))
         return server
+

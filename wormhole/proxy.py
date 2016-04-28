@@ -35,7 +35,7 @@ if sys.version_info < (3, 5):
 
 import asyncio
 from argparse import ArgumentParser
-from server import start_wormhole_server
+from wormhole.server import start_wormhole_server
 
 
 def main():
@@ -90,3 +90,4 @@ def main():
 
 if __name__ == '__main__':
     exit(main())
+
