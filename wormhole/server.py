@@ -198,7 +198,7 @@ async def process_http(client_reader, client_writer,
             req_writer.write(b'Host: ' + phost.encode())
         req_writer.write(b'\r\n')
 
-        [req_writer.write((header+'\r\n').encode()) for header in sreq]
+        [req_writer.write((header + '\r\n').encode()) for header in sreq]
         req_writer.write(b'\r\n')
 
         if payload != b'':

@@ -27,6 +27,8 @@ from base64 import decodebytes
 
 
 AUTH_LIST = []
+
+
 def get_auth_list(auth):
     global AUTH_LIST
     if not AUTH_LIST:

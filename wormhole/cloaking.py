@@ -38,7 +38,8 @@ def generate_random_headers():
         'X-%s: %s\r\n' % (
             generate_rndstrs(ascii_uppercase, 16),
             generate_rndstrs(ascii_letters + digits, 128)
-    ) for _ in range(32))
+        ) for _ in range(32)
+    )
 
 
 async def cloak(req_writer, phost, loop):
