@@ -62,4 +62,3 @@ async def cloak(req_writer, phost, loop):
         await asyncio.sleep(delay / 10.0, loop=loop)
         req_writer.write(c.encode())
         await req_writer.drain()
-

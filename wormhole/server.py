@@ -41,9 +41,11 @@ REGEX_CONNECTION = re.compile(r'\r\nConnection: (.+)\r\n', re.IGNORECASE)
 
 logging.basicConfig(level=logging.INFO,
                     format=('%(asctime)s %(name)s[%(process)d]: %(message)s'))
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 logger = logging.getLogger('wormhole')
 
 clients = {}
+wormhole_limit = None
 
 
 async def process_request(client_reader, ident, loop):
@@ -284,21 +286,32 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
         )
 
 
+def get_wormhole_limit(max_wormholes=1000, loop=None):
+    global wormhole_limit
+    if wormhole_limit is None:
+        wormhole_limit = asyncio.Semaphore(max_wormholes, loop=loop)
+    return wormhole_limit
+
+
+async def limit_process(client_reader, client_writer, cloaking, auth, loop):
+    async with get_wormhole_limit(loop=loop):
+        await process_wormhole(
+            client_reader, client_writer, cloaking, auth, loop
+        )
+
+
 def accept_client(client_reader, client_writer, cloaking, auth, loop):
     ident = {'id': hex(id(client_reader))[-6:],
              'client': client_writer.get_extra_info('peername')[0]}
     task = asyncio.ensure_future(
-        process_wormhole(client_reader, client_writer, cloaking, auth, loop),
+        limit_process( client_reader, client_writer, cloaking, auth, loop),
         loop=loop
     )
     clients[task] = (client_reader, client_writer)
     started_time = time()
 
     def client_done(task):
-        try:
-            del clients[task]
-        except:
-            pass
+        del clients[task]
         client_writer.close()
         logger.debug((
             '[{id}][{client}]: Connection closed (%.5f seconds)' % (
@@ -333,4 +346,3 @@ async def start_wormhole_server(host, port, cloaking, auth, verbose, loop):
             '[{id}][{client}]: wormhole bound at %s:%d.' % (host, port)
         ).format(**ident))
         return server
-

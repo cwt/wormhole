@@ -61,4 +61,3 @@ async def verify(client_writer, request_method, uri, headers, auth, ident):
             return {'id': ident['id'],
                     'client': '%s@%s' % (user, ident['client'])}
     return deny(client_writer)
-

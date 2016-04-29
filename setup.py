@@ -35,4 +35,3 @@ setup(
         'Topic :: Internet :: WWW/HTTP',
     ]
 )
-

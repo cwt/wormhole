@@ -9,4 +9,3 @@ RUN apk update && apk upgrade && apk add python3 && \
 
 EXPOSE     8800/tcp
 ENTRYPOINT ["/wormhole/bin/wormhole"]
-
