@@ -11,19 +11,17 @@ def readme():
 
 setup(
     name='wormhole',
-    version='1.3',
+    version='1.4',
     description='Asynchronous IO HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
-    url='https://github.com/bashell-com/wormhole',
+    url='https://bitbucket.org/bashell-com/wormhole',
     author='Chaiwat Suttipongsakul',
-    author_email='cwt' '@' 'bashell.com',
+    author_email='cwt@bashell.com',
     license='MIT License',
-    py_modules=['wormhole'],
-    entry_points='''
-        [console_scripts]
-        wormhole = wormhole:main
-    ''',  # for setuptools
-    scripts=['wormhole.py'],  # for distutils without setuptools
+    packages=['wormhole'],
+    include_package_data=True,
+    entry_points={'console_scripts': ['wormhole = wormhole.proxy:main']},
+    platforms=('POSIX',),
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
