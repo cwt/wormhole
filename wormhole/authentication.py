@@ -41,12 +41,10 @@ def get_auth_list(auth):
 
 
 def deny(client_writer):
-    DENY_MESSAGES = [
-        b'HTTP/1.1 407 Proxy Authentication Required\r\n',
-        b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
-        b'\r\n'
-    ]
-    [client_writer.write(message) for message in DENY_MESSAGES]
+    [client_writer.write(message)
+     for message in (b'HTTP/1.1 407 Proxy Authentication Required\r\n',
+                     b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
+                     b'\r\n')]
 
 
 async def verify(client_writer, request_method, uri, headers, auth, ident):
