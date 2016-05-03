@@ -1,32 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v1.4"
-
-"""
-Copyright (c) 2016 cwt
-Copyright (c) 2013 devunt
-
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without
-restriction, including without limitation the rights to use,
-copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-"""
+VERSION = "v1.5"
 
 import sys
 if sys.version_info < (3, 5):
@@ -35,6 +9,7 @@ if sys.version_info < (3, 5):
 
 import asyncio
 from argparse import ArgumentParser
+from wormhole.license import LICENSE
 from wormhole.server import start_wormhole_server
 
 
@@ -44,7 +19,8 @@ def main():
     """
     parser = ArgumentParser(
         description='Wormhole(%s): Asynchronous IO HTTP and HTTPS Proxy' %
-        VERSION)
+        VERSION
+    )
     parser.add_argument(
         '-H', '--host', default='0.0.0.0',
         help='Host to listen [default: %(default)s]'
@@ -63,10 +39,18 @@ def main():
         help='Add random string to header [default: %(default)s]'
     )
     parser.add_argument(
+        '-l', '--license', action='store_true', default=False,
+        help='Print LICENSE and exit'
+    )
+    parser.add_argument(
         '-v', '--verbose', action='count', default=0,
         help='Print verbose'
     )
     args = parser.parse_args()
+    if args.license:
+        print(parser.description)
+        print(LICENSE)
+        exit()
     if not (1 <= args.port <= 65535):
         parser.error('port must be 1-65535')
 

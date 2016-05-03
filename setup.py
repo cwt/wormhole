@@ -3,15 +3,17 @@ try:
 except ImportError:
     from distutils.core import setup
 
+from wormhole.proxy import VERSION
+
 
 def readme():
-    with open('README.md', encoding = 'utf-8') as f:
-        return f.read()
+    with open('README.md', encoding = 'utf-8') as readme_file:
+        return readme_file.read()
 
 
 setup(
     name='wormhole',
-    version='1.4',
+    version=VERSION,
     description='Asynchronous IO HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
     url='https://bitbucket.org/bashell-com/wormhole',

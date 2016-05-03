@@ -1,14 +1,15 @@
 Wormhole
 ========
 
-*(forked from [https://github.com/devunt/warp](https://github.com/devunt/warp))*
+*(Forked and converted to Mercurial from [https://github.com/devunt/warp](
+https://github.com/devunt/warp))*
 
 Asynchronous IO HTTP and HTTPS Proxy on Python 3.5
 
 Dependency
 ----------
 
-*  python >= 3.5.0
+*  Python >= 3.5.0
 
 
 Docker Image Usage
@@ -24,7 +25,7 @@ $ docker run -d -p 8800:8800 bashell/wormhole
 Run with authentication
 
 -   Create an empty directory on your docker host
--   Create an authentication file contains username and password in
+-   Create an authentication file that contains username and password in
     this format `username:password`
 -   Link that directory to the container via option `-v` and also run
     wormhole container with option `-a /path/to/authentication_file`
@@ -42,7 +43,7 @@ $ docker run -d -v /path/to/dir:/opt/wormhole \
 How to install
 --------------
 
-You can install **wormhole** using `pip`:
+You can install **wormhole** using `pip` with `mercurial`:
 
 ```bash
 $ pip install hg+https://bitbucket.org/bashell-com/wormhole
@@ -56,43 +57,50 @@ $ cd wormhole/
 $ pip install -e .
 ```
 
+You can also install the latest `default` snapshot using the following command:
+
+```bash
+$ pip install https://bitbucket.org/bashell-com/wormhole/get/default.tar.gz
+```
 
 How to use
 ----------
 
-1.  run `wormhole` command (or you might need to run `wormhole.py`
-    instead if setuptools isn't installed in your system)
+1.  Run **wormhole** command
     
     ```
     $ wormhole
     ```
 
-2.  set browser's proxy setting to
+2.  Set browser's proxy setting to
 
-    http proxy
-
-    :   host: 127.0.0.1 port: 8800
+    ```
+    host: 127.0.0.1
+    port: 8800
+    ```
 
 
 Command help
 ------------
 
 ```bash
-$ python wormhole.py --help
+$ wormhole --help
 ```
 
 
 License
 -------
 
-MIT License (included in `wormhole.py`)
+MIT License (included in [license.py](https://goo.gl/2J8rcu))
 
 
 Notice
 ------
 
-*  may not work in
+*  Authentication file contains `username` and `password` in **plain text**,
+   keep it secret! _(I will try to encrypt/encode it soon.)_
+
+*  Wormhole may not work in:
     -   some ISPs
-    -   some company firewalls
-    -   some school firewalls
-    -   some browers (will be fixed later)
+    -   some firewalls
+    -   some browers
