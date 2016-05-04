@@ -175,11 +175,16 @@ async def process_request(client_reader, max_retry, ident, loop):
             if line != b'':
                 header += line.decode()
 
-            content_length = get_content_length(header)
-            while len(payload) < content_length:
-                payload += await client_reader.read(1024)
-    except Exception as e:
-        logger.debug('!!! Task reject (%s)' % e, extra=ident)
+        content_length = get_content_length(header)
+        while len(payload) < content_length:
+            payload += await client_reader.read(1024)
+    except Exception as ex:
+        logger.debug((
+            '[{id}][{client}]: !!! Task reject (%s: %s)' % (
+                ex.__class__.__name__,
+                ' '.join(ex.args)
+            )
+        ).format(**ident))
 
     if header:
         header_lines = header.split('\r\n')

@@ -26,3 +26,4 @@ def get_content_length(header):
     match = REGEX_CONTENT_LENGTH.search(header)
     if match:
         return int(match.group(1))
+    return 0
