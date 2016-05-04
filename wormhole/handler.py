@@ -5,40 +5,48 @@ from wormhole.cloaking import cloak
 from wormhole.logging import get_logger
 
 
-REGEX_HOST = re.compile(r'(.+?):([0-9]{1,5})')
-logger = get_logger()
+def get_host_and_port(hostname, default_port=None):
+    regex_host = re.compile(r'(.+?):([0-9]{1,5})')
+    match = regex_host.search(hostname)
+    if match:
+        host = match.group(1)
+        port = int(match.group(2))
+    else:
+        host = hostname
+        port = default_port
+    return host, port
+
+
+async def relay_stream(stream_reader, stream_writer, return_first_line=False):
+    first_line = None
+    while True:
+        line = await stream_reader.read(1024)
+        if len(line) == 0:
+            break
+        if return_first_line and first_line is None:
+            first_line = line[:line.find(b'\r\n')]
+        stream_writer.write(line)
+    return first_line
 
 
 async def process_https(client_reader, client_writer, request_method, uri,
                         ident, loop):
-    m = REGEX_HOST.search(uri)
-    host = m.group(1)
-    port = int(m.group(2))
-    if port == 443:
-        url = 'https://%s/' % host
-    else:
-        url = 'https://%s:%s/' % (host, port)
+    response_code = 200
+    error_message = None
+    host, port = get_host_and_port(uri)
+    logger = get_logger()
     try:
-        logger.info((
-            '[{id}][{client}]: %s 200 %s' % (request_method, url)
-        ).format(**ident))
         req_reader, req_writer = await asyncio.open_connection(
             host, port, ssl=False, loop=loop
         )
         client_writer.write(b'HTTP/1.1 200 Connection established\r\n')
         client_writer.write(b'\r\n')
-
-        async def relay_stream(reader, writer):
-            try:
-                while True:
-                    line = await reader.read(1024)
-                    if len(line) == 0:
-                        break
-                    writer.write(line)
-            except:
-                logger.info((
-                    '[{id}][{client}]: %s 502 %s' % (request_method, url)
-                ).format(**ident))
+        # HTTPS need to log here, as the connection may keep alive for long.
+        logger.info((
+            '[{id}][{client}]: %s %d %s' % (
+                request_method, response_code, uri
+            )
+        ).format(**ident))
 
         tasks = [
             asyncio.ensure_future(
@@ -47,79 +55,80 @@ async def process_https(client_reader, client_writer, request_method, uri,
                 relay_stream(req_reader, client_writer), loop=loop),
         ]
         await asyncio.wait(tasks, loop=loop)
-    except:
-        logger.info((
-            '[{id}][{client}]: %s 502 %s' % (request_method, url)
+    except Exception as ex:
+        response_code = 502
+        error_message = '%s: %s' % (
+            ex.__class__.__name__,
+            ' '.join(ex.args)
+        )
+    if error_message:
+        logger.error((
+            '[{id}][{client}]: %s %d %s (%s)' % (
+                request_method, response_code, uri, error_message
+            )
         ).format(**ident))
 
 
 async def process_http(client_writer, request_method, uri, http_version,
                        headers, payload, cloaking, ident, loop):
-    phost = False
-    sreq = []
-    sreqHeaderEndIndex = 0
+    response_status = None
+    response_code = None
+    error_message = None
+    hostname = '127.0.0.1'  # hostname (with optional port) e.g. example.com:80
+    request_headers = []
+    request_headers_end_index = 0
     has_connection_header = False
 
     for header in headers:
-        headerNameAndValue = header.split(': ', 1)
+        name_and_value = header.split(': ', 1)
 
-        if len(headerNameAndValue) == 2:
-            headerName, headerValue = headerNameAndValue
+        if len(name_and_value) == 2:
+            name, value = name_and_value
         else:
-            headerName, headerValue = headerNameAndValue[0], None
+            name, value = name_and_value[0], None
 
-        if headerName.lower() == "host":
-            phost = headerValue
-        elif headerName.lower() == "connection":
+        if name.lower() == "host":
+            if value is not None:
+                hostname = value
+        elif name.lower() == "connection":
             has_connection_header = True
-            if headerValue.lower() in ('keep-alive', 'persist'):
+            if value.lower() in ('keep-alive', 'persist'):
                 # current version of this program does not support
                 # the HTTP keep-alive feature
-                sreq.append("Connection: close")
+                request_headers.append("Connection: close")
             else:
-                sreq.append(header)
-        elif headerName.lower() != 'proxy-connection':
-            sreq.append(header)
-            if len(header) == 0 and sreqHeaderEndIndex == 0:
-                sreqHeaderEndIndex = len(sreq) - 1
+                request_headers.append(header)
+        elif name.lower() != 'proxy-connection':
+            request_headers.append(header)
+            if len(header) == 0 and request_headers_end_index == 0:
+                request_headers_end_index = len(request_headers) - 1
 
-    if sreqHeaderEndIndex == 0:
-        sreqHeaderEndIndex = len(sreq)
+    if request_headers_end_index == 0:
+        request_headers_end_index = len(request_headers)
 
     if not has_connection_header:
-        sreq.insert(sreqHeaderEndIndex, "Connection: close")
+        request_headers.insert(request_headers_end_index, "Connection: close")
 
-    if not phost:
-        phost = '127.0.0.1'
-
-    path = uri[len(phost) + 7:]  # 7 is len('http://')
+    path = uri[len(hostname) + 7:]  # 7 is len('http://')
     new_head = ' '.join([request_method, path, http_version])
 
-    m = REGEX_HOST.search(phost)
-    if m:
-        host = m.group(1)
-        port = int(m.group(2))
-    else:
-        host = phost
-        port = 80
+    host, port = get_host_and_port(hostname, 80)
 
-    response_status = None
-    response_code = None
     try:
         req_reader, req_writer = await asyncio.open_connection(
             host, port, flags=TCP_NODELAY, loop=loop
         )
         req_writer.write(('%s\r\n' % new_head).encode())
         await req_writer.drain()
-        await asyncio.sleep(0.01, loop=loop)
 
         if cloaking:
-            await cloak(req_writer, phost, loop)
+            await cloak(req_writer, hostname, loop)
         else:
-            req_writer.write(b'Host: ' + phost.encode())
+            req_writer.write(b'Host: ' + hostname.encode())
         req_writer.write(b'\r\n')
 
-        [req_writer.write((header + '\r\n').encode()) for header in sreq]
+        [req_writer.write((header + '\r\n').encode())
+         for header in request_headers]
         req_writer.write(b'\r\n')
 
         if payload != b'':
@@ -127,21 +136,26 @@ async def process_http(client_writer, request_method, uri, http_version,
             req_writer.write(b'\r\n')
         await req_writer.drain()
 
-        try:
-            while True:
-                buf = await req_reader.read(1024)
-                if response_status is None:
-                    response_status = buf[:buf.find(b'\r\n')]
-                if len(buf) == 0:
-                    break
-                client_writer.write(buf)
-        except:
-            response_code = '502'
-    except:
-        response_code = '502'
+        response_status = await relay_stream(req_reader, client_writer, True)
+    except Exception as ex:
+        response_code = 502
+        error_message = '%s: %s' % (
+            ex.__class__.__name__,
+            ' '.join(ex.args)
+        )
 
     if response_code is None:
-        response_code = response_status.decode('ascii').split(' ')[1]
-    logger.info((
-        '[{id}][{client}]: %s %s %s' % (request_method, response_code, uri)
-    ).format(**ident))
+        response_code = int(response_status.decode('ascii').split(' ')[1])
+    logger = get_logger()
+    if error_message is None:
+        logger.info((
+            '[{id}][{client}]: %s %d %s' % (
+                request_method, response_code, uri
+            )
+        ).format(**ident))
+    else:
+        logger.error((
+            '[{id}][{client}]: %s %d %s (%s)' % (
+                request_method, response_code, uri, error_message
+            )
+        ).format(**ident))
