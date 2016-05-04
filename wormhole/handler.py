@@ -3,18 +3,8 @@ import re
 from socket import TCP_NODELAY
 from wormhole.cloaking import cloak
 from wormhole.logging import get_logger
-
-
-def get_host_and_port(hostname, default_port=None):
-    regex_host = re.compile(r'(.+?):([0-9]{1,5})')
-    match = regex_host.search(hostname)
-    if match:
-        host = match.group(1)
-        port = int(match.group(2))
-    else:
-        host = hostname
-        port = default_port
-    return host, port
+from wormhole.tools import get_content_length
+from wormhole.tools import get_host_and_port
 
 
 async def relay_stream(stream_reader, stream_writer, return_first_line=False):
@@ -159,3 +149,43 @@ async def process_http(client_writer, request_method, uri, http_version,
                 request_method, response_code, uri, error_message
             )
         ).format(**ident))
+
+
+async def process_request(client_reader, max_retry, ident, loop):
+    logger = get_logger()
+    request_line = ''
+    headers = []
+    header = ''
+    payload = b''
+    try:
+        retry = 0
+        while True:
+            line = await client_reader.readline()
+            if not line:
+                if len(header) == 0 and retry < max_retry:
+                    # handle the case when the client make connection
+                    # but sending data is delayed for some reasons
+                    retry += 1
+                    await asyncio.sleep(0.1, loop=loop)
+                    continue
+                else:
+                    break
+            if line == b'\r\n':
+                break
+            if line != b'':
+                header += line.decode()
+
+            content_length = get_content_length(header)
+            while len(payload) < content_length:
+                payload += await client_reader.read(1024)
+    except Exception as e:
+        logger.debug('!!! Task reject (%s)' % e, extra=ident)
+
+    if header:
+        header_lines = header.split('\r\n')
+        if len(header_lines) > 1:
+            request_line = header_lines[0]
+        if len(header_lines) > 2:
+            headers = header_lines[1:-1]
+
+    return request_line, headers, payload

@@ -1,62 +1,17 @@
 import asyncio
 import functools
 import logging
-import re
 from time import time
 from wormhole.authentication import get_ident
 from wormhole.authentication import verify
 from wormhole.handler import process_http
 from wormhole.handler import process_https
+from wormhole.handler import process_request
 from wormhole.logging import get_logger
 
 
 MAX_RETRY = 3
 MAX_TASKS = 1000
-REGEX_CONTENT_LENGTH = re.compile(
-    r'\r\nContent-Length: ([0-9]+)\r\n',
-    re.IGNORECASE
-)
-
-
-async def process_request(client_reader, ident, loop):
-    logger = get_logger()
-    request_line = ''
-    headers = []
-    header = ''
-    payload = b''
-    try:
-        retry = 0
-        while True:
-            line = await client_reader.readline()
-            if not line:
-                if len(header) == 0 and retry < MAX_RETRY:
-                    # handle the case when the client make connection
-                    # but sending data is delayed for some reasons
-                    retry += 1
-                    await asyncio.sleep(0.1, loop=loop)
-                    continue
-                else:
-                    break
-            if line == b'\r\n':
-                break
-            if line != b'':
-                header += line.decode()
-        m = REGEX_CONTENT_LENGTH.search(header)
-        if m:
-            cl = int(m.group(1))
-            while len(payload) < cl:
-                payload += await client_reader.read(1024)
-    except Exception as e:
-        logger.debug('!!! Task reject (%s)' % e, extra=ident)
-
-    if header:
-        header_lines = header.split('\r\n')
-        if len(header_lines) > 1:
-            request_line = header_lines[0]
-        if len(header_lines) > 2:
-            headers = header_lines[1:-1]
-
-    return request_line, headers, payload
 
 
 async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
@@ -64,7 +19,7 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
     ident = get_ident(client_reader, client_writer)
 
     request_line, headers, payload = await process_request(
-        client_reader, ident, loop
+        client_reader, MAX_RETRY, ident, loop
     )
     if not request_line:
         logger.debug((
@@ -93,7 +48,7 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
             return
         ident = user_ident
 
-    if request_method == 'CONNECT':  # https proxy
+    if request_method == 'CONNECT':
         return await process_https(
             client_reader, client_writer, request_method, uri,
             ident, loop
