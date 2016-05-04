@@ -7,7 +7,7 @@ from wormhole.authentication import verify
 from wormhole.handler import process_http
 from wormhole.handler import process_https
 from wormhole.handler import process_request
-from wormhole.logging import get_logger
+from wormhole.logger import get_logger
 
 
 MAX_RETRY = 3
@@ -103,8 +103,9 @@ def accept_client(client_reader, client_writer, cloaking, auth, loop):
     task.add_done_callback(client_done)
 
 
-async def start_wormhole_server(host, port, cloaking, auth, verbose, loop):
-    logger = get_logger()
+async def start_wormhole_server(host, port, cloaking, auth,
+                                syslog_host, syslog_port, verbose, loop):
+    logger = get_logger(syslog_host, syslog_port)
     if verbose > 0:
         logger.setLevel(logging.DEBUG)
     try:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v1.6"
+VERSION = "v1.7"
 
 import sys
 if sys.version_info < (3, 5):
@@ -39,6 +39,14 @@ def main():
         help='Add random string to header [default: %(default)s]'
     )
     parser.add_argument(
+        '-S', '--syslog-host', default='DISABLED',
+        help='Syslog Host [default: %(default)s]'
+    )
+    parser.add_argument(
+        '-P', '--syslog-port', type=int, default=514,
+        help='Syslog Port to listen [default: %(default)d]'
+    )
+    parser.add_argument(
         '-l', '--license', action='store_true', default=False,
         help='Print LICENSE and exit'
     )
@@ -60,6 +68,7 @@ def main():
             start_wormhole_server(
                 args.host, args.port,
                 args.cloaking, args.authentication,
+                args.syslog_host, args.syslog_port,
                 args.verbose, loop
             )
         )

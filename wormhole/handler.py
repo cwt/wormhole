@@ -1,8 +1,7 @@
 import asyncio
-import re
 from socket import TCP_NODELAY
 from wormhole.cloaking import cloak
-from wormhole.logging import get_logger
+from wormhole.logger import get_logger
 from wormhole.tools import get_content_length
 from wormhole.tools import get_host_and_port
 
