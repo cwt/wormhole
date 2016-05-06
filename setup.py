@@ -12,8 +12,8 @@ def readme():
 
 
 setup(
-    name='wormhole',
-    version=VERSION,
+    name='wormhole-proxy',
+    version=VERSION.replace('v',''),  # normalize version from vd.d to d.d
     description='Asynchronous IO HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
     url='https://bitbucket.org/bashell-com/wormhole',
