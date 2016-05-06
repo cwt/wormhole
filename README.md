@@ -1,8 +1,7 @@
 Wormhole
 ========
 
-*(Forked and converted to Mercurial from [https://github.com/devunt/warp](
-https://github.com/devunt/warp))*
+*(Forked and converted to Mercurial from [https://github.com/devunt/warp](https://github.com/devunt/warp))*
 
 Asynchronous IO HTTP and HTTPS Proxy on Python 3.5
 

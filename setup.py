@@ -7,7 +7,7 @@ from wormhole.proxy import VERSION
 
 
 def readme():
-    with open('README.md', encoding = 'utf-8') as readme_file:
+    with open('README.txt', encoding = 'utf-8') as readme_file:
         return readme_file.read()
 
 
@@ -23,7 +23,7 @@ setup(
     packages=['wormhole'],
     include_package_data=True,
     entry_points={'console_scripts': ['wormhole = wormhole.proxy:main']},
-    platforms=('POSIX',),
+    platforms='POSIX',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
@@ -35,5 +35,5 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Topic :: Internet :: Proxy Servers',
         'Topic :: Internet :: WWW/HTTP',
-    ]
+    ],
 )
