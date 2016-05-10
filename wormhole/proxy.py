@@ -10,6 +10,7 @@ if sys.version_info < (3, 5):
 import asyncio
 from argparse import ArgumentParser
 from wormhole.license import LICENSE
+from wormhole.logger import get_logger
 from wormhole.server import start_wormhole_server
 
 
@@ -62,11 +63,15 @@ def main():
     if not (1 <= args.port <= 65535):
         parser.error('port must be 1-65535')
 
+    logger = get_logger(args.syslog_host, args.syslog_port, args.verbose)
     try:
         import uvloop
     except ImportError:
         pass
     else:
+        logger.debug(
+            '[000000][%s]: Using event loop from uvloop.' % args.host
+        )
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.get_event_loop()
     try:
@@ -74,8 +79,7 @@ def main():
             start_wormhole_server(
                 args.host, args.port,
                 args.cloaking, args.authentication,
-                args.syslog_host, args.syslog_port,
-                args.verbose, loop
+                loop
             )
         )
         loop.run_forever()
