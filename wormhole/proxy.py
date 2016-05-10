@@ -62,6 +62,12 @@ def main():
     if not (1 <= args.port <= 65535):
         parser.error('port must be 1-65535')
 
+    try:
+        import uvloop
+    except ImportError:
+        pass
+    else:
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(
