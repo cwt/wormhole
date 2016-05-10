@@ -6,15 +6,28 @@ from wormhole.tools import get_content_length
 from wormhole.tools import get_host_and_port
 
 
-async def relay_stream(stream_reader, stream_writer, return_first_line=False):
+async def relay_stream(stream_reader, stream_writer,
+                       ident, return_first_line=False):
+    logger = get_logger()
     first_line = None
     while True:
-        line = await stream_reader.read(1024)
-        if len(line) == 0:
+        try:
+            line = await stream_reader.read(1024)
+            if len(line) == 0:
+                break
+            stream_writer.write(line)
+        except Exception as ex:
+            error_message = '%s: %s' % (
+                ex.__class__.__name__,
+                ' '.join([str(arg) for arg in ex.args])
+            )
+            logger.debug((
+                '[{id}][{client}]: %s' % error_message
+            ).format(**ident))
             break
-        if return_first_line and first_line is None:
-            first_line = line[:line.find(b'\r\n')]
-        stream_writer.write(line)
+        else:
+            if return_first_line and first_line is None:
+                first_line = line[:line.find(b'\r\n')]
     return first_line
 
 
@@ -39,16 +52,16 @@ async def process_https(client_reader, client_writer, request_method, uri,
 
         tasks = [
             asyncio.ensure_future(
-                relay_stream(client_reader, req_writer), loop=loop),
+                relay_stream(client_reader, req_writer, ident), loop=loop),
             asyncio.ensure_future(
-                relay_stream(req_reader, client_writer), loop=loop),
+                relay_stream(req_reader, client_writer, ident), loop=loop),
         ]
         await asyncio.wait(tasks, loop=loop)
     except Exception as ex:
         response_code = 502
         error_message = '%s: %s' % (
             ex.__class__.__name__,
-            ' '.join(ex.args)
+            ' '.join([str(arg) for arg in ex.args])
         )
     if error_message:
         logger.error((
@@ -125,12 +138,14 @@ async def process_http(client_writer, request_method, uri, http_version,
             req_writer.write(b'\r\n')
         await req_writer.drain()
 
-        response_status = await relay_stream(req_reader, client_writer, True)
+        response_status = await relay_stream(
+            req_reader, client_writer, ident, True
+        )
     except Exception as ex:
         response_code = 502
         error_message = '%s: %s' % (
             ex.__class__.__name__,
-            ' '.join(ex.args)
+            ' '.join([str(arg) for arg in ex.args])
         )
 
     if response_code is None:
@@ -181,7 +196,7 @@ async def process_request(client_reader, max_retry, ident, loop):
         logger.debug((
             '[{id}][{client}]: !!! Task reject (%s: %s)' % (
                 ex.__class__.__name__,
-                ' '.join(ex.args)
+                ' '.join([str(arg) for arg in ex.args])
             )
         ).format(**ident))
 
