@@ -1,6 +1,6 @@
 import asyncio
 import functools
-import logging
+import resource
 from time import time
 from wormhole.authentication import get_ident
 from wormhole.authentication import verify
@@ -11,7 +11,29 @@ from wormhole.logger import get_logger
 
 
 MAX_RETRY = 3
-MAX_TASKS = 1000
+MAX_TASKS = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+
+
+wormhole_semaphore = None
+def get_wormhole_semaphore(loop):
+    max_wormholes = int(0.9 * MAX_TASKS)  # Use only 90% of open files limit.
+    global wormhole_semaphore
+    if wormhole_semaphore is None:
+        wormhole_semaphore = asyncio.Semaphore(max_wormholes, loop=loop)
+    return wormhole_semaphore
+
+
+def debug_wormhole_semaphore(client_reader, client_writer):
+    global wormhole_semaphore
+    ident = get_ident(client_reader, client_writer)
+    available = wormhole_semaphore._value
+    logger = get_logger()
+    logger.debug((
+        '[{id}][{client}]: Resource available: %.2f%% (%d/%d)' % (
+            100 * float(available) / MAX_TASKS,
+            available,
+            MAX_TASKS
+    )).format(**ident))
 
 
 async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
@@ -49,31 +71,29 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
         ident = user_ident
 
     if request_method == 'CONNECT':
-        return await process_https(
-            client_reader, client_writer, request_method, uri,
-            ident, loop
-        )
+        async with get_wormhole_semaphore(loop=loop):
+            debug_wormhole_semaphore(client_reader, client_writer)
+            return await process_https(
+                client_reader, client_writer, request_method, uri,
+                ident, loop
+            )
     else:
-        return await process_http(
-            client_writer, request_method, uri, http_version,
-            headers, payload, cloaking,
-            ident, loop
-        )
+        async with get_wormhole_semaphore(loop=loop):
+            debug_wormhole_semaphore(client_reader, client_writer)
+            return await process_http(
+                client_writer, request_method, uri, http_version,
+                headers, payload, cloaking,
+                ident, loop
+            )
 
 
-wormhole_semaphore = None
-def get_wormhole_semaphore(max_wormholes=MAX_TASKS, loop=None):
-    global wormhole_semaphore
-    if wormhole_semaphore is None:
-        wormhole_semaphore = asyncio.Semaphore(max_wormholes, loop=loop)
-    return wormhole_semaphore
-
-
-async def limit_process(client_reader, client_writer, cloaking, auth, loop):
+async def limit_wormhole(client_reader, client_writer, cloaking, auth, loop):
     async with get_wormhole_semaphore(loop=loop):
+        debug_wormhole_semaphore(client_reader, client_writer)
         await process_wormhole(
             client_reader, client_writer, cloaking, auth, loop
         )
+        debug_wormhole_semaphore(client_reader, client_writer)
 
 
 clients = dict()
@@ -81,7 +101,7 @@ def accept_client(client_reader, client_writer, cloaking, auth, loop):
     logger = get_logger()
     ident = get_ident(client_reader, client_writer)
     task = asyncio.ensure_future(
-        limit_process(client_reader, client_writer, cloaking, auth, loop),
+        limit_wormhole(client_reader, client_writer, cloaking, auth, loop),
         loop=loop
     )
     global clients
@@ -103,11 +123,8 @@ def accept_client(client_reader, client_writer, cloaking, auth, loop):
     task.add_done_callback(client_done)
 
 
-async def start_wormhole_server(host, port, cloaking, auth,
-                                syslog_host, syslog_port, verbose, loop):
-    logger = get_logger(syslog_host, syslog_port)
-    if verbose > 0:
-        logger.setLevel(logging.DEBUG)
+async def start_wormhole_server(host, port, cloaking, auth, loop):
+    logger = get_logger()
     try:
         accept = functools.partial(
             accept_client, cloaking=cloaking, auth=auth, loop=loop
