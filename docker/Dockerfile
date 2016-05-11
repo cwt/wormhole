@@ -11,12 +11,12 @@ RUN tdnf install -y autoconf automake binutils flex gawk gcc gdbm glibc-devel \
     pip3.5 install virtualenv && cd / && virtualenv wormhole && \
     /wormhole/bin/pip install cython && \
     /wormhole/bin/pip install uvloop && \
+    /wormhole/bin/pip uninstall -y cython && \
     /wormhole/bin/pip install wormhole-proxy && \
     tdnf remove -y autoconf automake binutils flex gawk gcc gdbm glibc-devel \
         libgcc-devel libgomp libgomp-devel libstdc++-devel libtool \
         linux-api-headers m4 make mpc mpfr perl sed && tdnf clean all && \
-    rm -rf /root/.cache && \
-    for cache in `find /wormhole -iname '__pycache__'`; do rm -rf $cache; done
+    rm -rf /root/.cache
 
 ADD wormhole-forever.sh /wormhole/bin/
 
