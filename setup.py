@@ -7,7 +7,7 @@ from wormhole.proxy import VERSION
 
 
 def readme():
-    with open('README.txt', encoding = 'utf-8') as readme_file:
+    with open('README.rst', encoding = 'utf-8') as readme_file:
         return readme_file.read()
 
 
