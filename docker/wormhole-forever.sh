@@ -1,5 +1,5 @@
 #!/bin/bash
-
+ulimit -n 8192
 # Showing help or license then exit normally.
 if [ "$1" = "-h" ] || [ "$1" = "--help" ] \
 || [ "$1" = "-l" ] || [ "$1" = "--license" ]; then
