@@ -1,8 +1,6 @@
 Wormhole
 ========
 
-Asynchronous I/O HTTP and HTTPS Proxy on Python 3.5
-
 **Wormhole** is a forward proxy without caching. You may use it to:
 
 -  Modifying requests to look like they are originated from the IP address
@@ -35,6 +33,8 @@ Run with authentication
    format ``username:password``
 -  Link that directory to the container via option ``-v`` and also run wormhole
    container with option ``-a /path/to/authentication_file``
+
+Example:
 
 ::
 
