@@ -3,7 +3,7 @@
 FROM photon:latest
 MAINTAINER Chaiwat Suttipongsakul "cwt@bashell.com"
 
-RUN tdnf update -y && tdnf clean all
+RUN tdnf upgrade -y ; /bin/true && tdnf clean all
 RUN tdnf install -y python3 python3-libs python3-tools python3-devel && tdnf clean all
 RUN tdnf install -y autoconf automake binutils flex gawk gcc glibc-devel \
         libgcc-devel libgomp libgomp-devel libstdc++-devel libtool \
