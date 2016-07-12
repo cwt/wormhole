@@ -1,22 +1,17 @@
 # wormhole proxy
 
-FROM photon:latest
+FROM bashell/alpine-bash:latest
 MAINTAINER Chaiwat Suttipongsakul "cwt@bashell.com"
 
-RUN tdnf upgrade -y ; /bin/true && tdnf clean all
-RUN tdnf install -y python3 python3-libs python3-tools python3-devel && tdnf clean all
-RUN tdnf install -y autoconf automake binutils flex gawk gcc glibc-devel \
-        libgcc-devel libgomp libgomp-devel libstdc++-devel libtool \
-        linux-api-headers m4 make mpc mpfr perl sed && tdnf clean all && \
-    pip3.5 install virtualenv && cd / && virtualenv wormhole && \
+RUN apk update && apk upgrade && apk add python3
+RUN apk add python3-dev musl-dev gcc make && \
+    cd / && pyvenv-3.5 wormhole && \
     /wormhole/bin/pip install cython && \
     /wormhole/bin/pip install uvloop && \
     /wormhole/bin/pip uninstall -y cython && \
     /wormhole/bin/pip install wormhole-proxy && \
-    tdnf remove -y autoconf automake binutils flex gawk gcc glibc-devel \
-        libgcc-devel libgomp libgomp-devel libstdc++-devel libtool \
-        linux-api-headers m4 make mpc mpfr perl sed && tdnf clean all && \
-    rm -rf /root/.cache && \
+    apk del python3-dev musl-dev gcc make && \
+    rm -rf /root/.cache && rm -rf /var/cache/apk/* && \
     for cache in `find /wormhole -iname '__pycache__'`; do rm -rf $cache; done
 
 ADD wormhole-forever.sh /wormhole/bin/
