@@ -3,10 +3,10 @@
 FROM bashell/alpine-bash:latest
 MAINTAINER Chaiwat Suttipongsakul "cwt@bashell.com"
 
-RUN apk update && apk upgrade && apk add python3
-RUN cd / && pyvenv-3.5 wormhole && \
+RUN apk update && apk upgrade && apk add python3 && rm -rf /var/cache/apk/*
+RUN cd / && pyvenv wormhole && \
     /wormhole/bin/pip install wormhole-proxy && \
-    rm -rf /root/.cache && rm -rf /var/cache/apk/* && \
+    rm -rf /root/.cache && \
     for cache in `find /wormhole -iname '__pycache__'`; do rm -rf $cache; done
 
 ADD wormhole-forever.sh /wormhole/bin/
