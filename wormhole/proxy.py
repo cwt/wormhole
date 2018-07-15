@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v2.0.2"
+VERSION = "v2.0.3"
 
 import sys
 if sys.version_info < (3, 5):

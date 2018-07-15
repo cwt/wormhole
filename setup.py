@@ -21,7 +21,6 @@ setup(
     description='Asynchronous I/O HTTP and HTTPS Proxy on Python 3.5',
     long_description=readme(),
     keywords='wormhole asynchronous web proxy',
-    platforms='POSIX',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
@@ -29,9 +28,13 @@ setup(
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX',
+        'Operating System :: Microsoft :: Windows',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: Implementation :: CPython',
         'Topic :: Internet :: Proxy Servers',
+    ],
+    install_requires=[
+        'pywin32;platform_system=="Windows"',
     ],
     packages=['wormhole'],
     include_package_data=True,

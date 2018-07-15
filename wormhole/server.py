@@ -1,6 +1,6 @@
 import asyncio
 import functools
-import resource
+import sys
 from time import time
 from wormhole.authentication import get_ident
 from wormhole.authentication import verify
@@ -11,7 +11,12 @@ from wormhole.logger import get_logger
 
 
 MAX_RETRY = 3
-MAX_TASKS = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+if sys.platform == 'win32':
+    import win32file
+    MAX_TASKS = win32file._getmaxstdio()
+else:
+    import resource
+    MAX_TASKS = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
 
 
 wormhole_semaphore = None
