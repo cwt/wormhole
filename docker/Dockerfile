@@ -4,9 +4,14 @@ FROM bashell/alpine-bash:latest
 MAINTAINER Chaiwat Suttipongsakul "cwt@bashell.com"
 
 RUN apk update && apk upgrade && apk add python3 && rm -rf /var/cache/apk/*
-RUN cd / && pyvenv wormhole && \
+RUN apk update && apk add python3-dev musl-dev gcc make && \
+    cd / && pyvenv wormhole && \
+    /wormhole/bin/pip install cython && \
+    /wormhole/bin/pip install uvloop && \
+    /wormhole/bin/pip uninstall -y cython && \
     /wormhole/bin/pip install wormhole-proxy && \
-    rm -rf /root/.cache && \
+    apk del python3-dev musl-dev gcc make && \
+    rm -rf /root/.cache && rm -rf /var/cache/apk/* && \
     for cache in `find /wormhole -iname '__pycache__'`; do rm -rf $cache; done
 
 ADD wormhole-forever.sh /wormhole/bin/
