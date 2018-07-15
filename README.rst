@@ -1,7 +1,7 @@
 Wormhole
 ========
 
-**Wormhole** is a forward proxy without caching. You may use it to:
+**Wormhole** is a forward proxy without caching. You may use it for:
 
 -  Modifying requests to look like they are originated from the IP address
    that *Wormhole* is running on.
@@ -20,7 +20,7 @@ Docker Image Usage
 Run without authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-::
+.. code:: shell
 
     $ docker pull bashell/wormhole
     $ docker run -d -p 8800:8800 bashell/wormhole
@@ -36,7 +36,7 @@ Run with authentication
 
 Example:
 
-::
+.. code:: shell
 
     $ docker pull bashell/wormhole
     $ mkdir -p /path/to/dir
@@ -53,7 +53,7 @@ Stable Version
 
 Please install the **stable version** using ``pip`` command:
 
-::
+.. code:: shell
 
     $ pip install wormhole-proxy
 
@@ -62,13 +62,13 @@ Development Snapshot
 
 You can install the **development snapshot** using ``pip`` with ``mercurial``:
 
-::
+.. code:: shell
 
     $ pip install hg+https://bitbucket.org/bashell-com/wormhole
 
 Or install from your local clone:
 
-::
+.. code:: shell
 
     $ hg clone https://bitbucket.org/bashell-com/wormhole
     $ cd wormhole/
@@ -77,7 +77,7 @@ Or install from your local clone:
 You can also install the latest ``default`` snapshot using the following
 command:
 
-::
+.. code:: shell
 
     $ pip install https://bitbucket.org/bashell-com/wormhole/get/default.tar.gz
 
@@ -86,13 +86,13 @@ How to use
 
 #. Run **wormhole** command
 
-   ::
+   .. code:: shell
 
        $ wormhole
 
 #. Set browser's proxy setting to
 
-   ::
+   .. code:: shell
 
        host: 127.0.0.1
        port: 8800
@@ -100,7 +100,7 @@ How to use
 Command help
 ------------
 
-::
+.. code:: shell
 
     $ wormhole --help
 
