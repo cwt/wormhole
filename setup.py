@@ -35,6 +35,7 @@ setup(
     ],
     install_requires=[
         'pywin32;platform_system=="Windows"',
+        'uvloop;platform_system=="Linux"',
     ],
     packages=['wormhole'],
     include_package_data=True,
