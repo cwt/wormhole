@@ -1,20 +1,20 @@
 # wormhole proxy
 
-FROM bashell/alpine-bash:latest
-MAINTAINER Chaiwat Suttipongsakul "cwt@bashell.com"
+FROM quay.io/bashell/alpine-bash:latest
 
-RUN apk update && apk upgrade && apk add python3 && rm -rf /var/cache/apk/*
-RUN apk update && apk add python3-dev musl-dev gcc make && \
-    cd / && pyvenv wormhole && \
-    /wormhole/bin/pip install cython && \
-    /wormhole/bin/pip install uvloop && \
-    /wormhole/bin/pip uninstall -y cython && \
-    /wormhole/bin/pip install wormhole-proxy && \
-    apk del python3-dev musl-dev gcc make && \
-    rm -rf /root/.cache && rm -rf /var/cache/apk/* && \
-    for cache in `find /wormhole -iname '__pycache__'`; do rm -rf $cache; done
+RUN apk update \
+ && apk upgrade \
+ && apk add python3 python3-dev musl-dev gcc make \
+ && python3 -O -m venv /wormhole \
+ && /wormhole/bin/pip install cython \
+ && /wormhole/bin/pip install --compile uvloop \
+ && /wormhole/bin/pip uninstall -y cython \
+ && /wormhole/bin/pip install --compile wormhole-proxy \
+ && apk del python3-dev musl-dev gcc make \
+ && rm -rf /root/.cache /var/cache/apk/*
 
 ADD wormhole-forever.sh /wormhole/bin/
 
 EXPOSE     8800/tcp
 ENTRYPOINT ["/wormhole/bin/wormhole-forever.sh"]
+
