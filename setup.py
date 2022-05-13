@@ -3,7 +3,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-from wormhole.proxy import VERSION
+from wormhole.version import VERSION
 
 
 def readme():

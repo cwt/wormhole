@@ -2,12 +2,12 @@ import asyncio
 import functools
 import sys
 from time import time
-from authentication import get_ident
-from authentication import verify
-from handler import process_http
-from handler import process_https
-from handler import process_request
-from logger import get_logger
+from wormhole.authentication import get_ident
+from wormhole.authentication import verify
+from wormhole.handler import process_http
+from wormhole.handler import process_https
+from wormhole.handler import process_request
+from wormhole.logger import get_logger
 
 
 MAX_RETRY = 3
