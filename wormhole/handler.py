@@ -1,9 +1,8 @@
 import asyncio
 from socket import TCP_NODELAY
-from wormhole.cloaking import cloak
-from wormhole.logger import get_logger
-from wormhole.tools import get_content_length
-from wormhole.tools import get_host_and_port
+from logger import get_logger
+from tools import get_content_length
+from tools import get_host_and_port
 
 
 async def relay_stream(stream_reader, stream_writer,
@@ -32,14 +31,14 @@ async def relay_stream(stream_reader, stream_writer,
 
 
 async def process_https(client_reader, client_writer, request_method, uri,
-                        ident, loop):
+                        ident):
     response_code = 200
     error_message = None
     host, port = get_host_and_port(uri)
     logger = get_logger()
     try:
         req_reader, req_writer = await asyncio.open_connection(
-            host, port, ssl=False, loop=loop
+            host, port, ssl=False
         )
         client_writer.write(b'HTTP/1.1 200 Connection established\r\n')
         client_writer.write(b'\r\n')
@@ -52,11 +51,11 @@ async def process_https(client_reader, client_writer, request_method, uri,
 
         tasks = [
             asyncio.ensure_future(
-                relay_stream(client_reader, req_writer, ident), loop=loop),
+                relay_stream(client_reader, req_writer, ident)),
             asyncio.ensure_future(
-                relay_stream(req_reader, client_writer, ident), loop=loop),
+                relay_stream(req_reader, client_writer, ident)),
         ]
-        await asyncio.wait(tasks, loop=loop)
+        await asyncio.wait(tasks)
     except Exception as ex:
         response_code = 502
         error_message = '%s: %s' % (
@@ -72,7 +71,7 @@ async def process_https(client_reader, client_writer, request_method, uri,
 
 
 async def process_http(client_writer, request_method, uri, http_version,
-                       headers, payload, cloaking, ident, loop):
+                       headers, payload, ident):
     response_status = None
     response_code = None
     error_message = None
@@ -118,15 +117,12 @@ async def process_http(client_writer, request_method, uri, http_version,
 
     try:
         req_reader, req_writer = await asyncio.open_connection(
-            host, port, flags=TCP_NODELAY, loop=loop
+            host, port, flags=TCP_NODELAY
         )
         req_writer.write(('%s\r\n' % new_head).encode())
         await req_writer.drain()
 
-        if cloaking:
-            await cloak(req_writer, hostname, loop)
-        else:
-            req_writer.write(b'Host: ' + hostname.encode())
+        req_writer.write(b'Host: ' + hostname.encode())
         req_writer.write(b'\r\n')
 
         [req_writer.write((header + '\r\n').encode())
@@ -165,7 +161,7 @@ async def process_http(client_writer, request_method, uri, http_version,
         ).format(**ident))
 
 
-async def process_request(client_reader, max_retry, ident, loop):
+async def process_request(client_reader, max_retry, ident):
     logger = get_logger()
     request_line = ''
     headers = []
@@ -180,7 +176,7 @@ async def process_request(client_reader, max_retry, ident, loop):
                     # handle the case when the client make connection
                     # but sending data is delayed for some reasons
                     retry += 1
-                    await asyncio.sleep(0.1, loop=loop)
+                    await asyncio.sleep(0.1)
                     continue
                 else:
                     break

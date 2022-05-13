@@ -2,12 +2,12 @@ import asyncio
 import functools
 import sys
 from time import time
-from wormhole.authentication import get_ident
-from wormhole.authentication import verify
-from wormhole.handler import process_http
-from wormhole.handler import process_https
-from wormhole.handler import process_request
-from wormhole.logger import get_logger
+from authentication import get_ident
+from authentication import verify
+from handler import process_http
+from handler import process_https
+from handler import process_request
+from logger import get_logger
 
 
 MAX_RETRY = 3
@@ -20,11 +20,11 @@ else:
 
 
 wormhole_semaphore = None
-def get_wormhole_semaphore(loop):
+def get_wormhole_semaphore():
     max_wormholes = int(0.9 * MAX_TASKS)  # Use only 90% of open files limit.
     global wormhole_semaphore
     if wormhole_semaphore is None:
-        wormhole_semaphore = asyncio.Semaphore(max_wormholes, loop=loop)
+        wormhole_semaphore = asyncio.Semaphore(max_wormholes)
     return wormhole_semaphore
 
 
@@ -41,12 +41,12 @@ def debug_wormhole_semaphore(client_reader, client_writer):
     )).format(**ident))
 
 
-async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
+async def process_wormhole(client_reader, client_writer, auth):
     logger = get_logger()
     ident = get_ident(client_reader, client_writer)
 
     request_line, headers, payload = await process_request(
-        client_reader, MAX_RETRY, ident, loop
+        client_reader, MAX_RETRY, ident
     )
     if not request_line:
         logger.debug((
@@ -76,38 +76,37 @@ async def process_wormhole(client_reader, client_writer, cloaking, auth, loop):
         ident = user_ident
 
     if request_method == 'CONNECT':
-        async with get_wormhole_semaphore(loop=loop):
+        async with get_wormhole_semaphore():
             debug_wormhole_semaphore(client_reader, client_writer)
             return await process_https(
                 client_reader, client_writer, request_method, uri,
-                ident, loop
+                ident
             )
     else:
-        async with get_wormhole_semaphore(loop=loop):
+        async with get_wormhole_semaphore():
             debug_wormhole_semaphore(client_reader, client_writer)
             return await process_http(
                 client_writer, request_method, uri, http_version,
-                headers, payload, cloaking,
-                ident, loop
+                headers, payload,
+                ident
             )
 
 
-async def limit_wormhole(client_reader, client_writer, cloaking, auth, loop):
-    async with get_wormhole_semaphore(loop=loop):
+async def limit_wormhole(client_reader, client_writer, auth):
+    async with get_wormhole_semaphore():
         debug_wormhole_semaphore(client_reader, client_writer)
         await process_wormhole(
-            client_reader, client_writer, cloaking, auth, loop
+            client_reader, client_writer, auth
         )
         debug_wormhole_semaphore(client_reader, client_writer)
 
 
 clients = dict()
-def accept_client(client_reader, client_writer, cloaking, auth, loop):
+def accept_client(client_reader, client_writer, auth):
     logger = get_logger()
     ident = get_ident(client_reader, client_writer)
     task = asyncio.ensure_future(
-        limit_wormhole(client_reader, client_writer, cloaking, auth, loop),
-        loop=loop
+        limit_wormhole(client_reader, client_writer, auth)
     )
     global clients
     clients[task] = (client_reader, client_writer)
@@ -128,13 +127,13 @@ def accept_client(client_reader, client_writer, cloaking, auth, loop):
     task.add_done_callback(client_done)
 
 
-async def start_wormhole_server(host, port, cloaking, auth, loop):
+async def start_wormhole_server(host, port, auth):
     logger = get_logger()
     try:
         accept = functools.partial(
-            accept_client, cloaking=cloaking, auth=auth, loop=loop
+            accept_client, auth=auth
         )
-        server = await asyncio.start_server(accept, host, port, loop=loop)
+        server = await asyncio.start_server(accept, host, port)
     except OSError as ex:
         logger.critical(
             '[000000][%s]: !!! Failed to bind server at [%s:%d]: %s' % (

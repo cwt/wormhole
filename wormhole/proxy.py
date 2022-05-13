@@ -9,9 +9,9 @@ if sys.version_info < (3, 5):
 
 import asyncio
 from argparse import ArgumentParser
-from wormhole.license import LICENSE
-from wormhole.logger import get_logger
-from wormhole.server import start_wormhole_server
+from license import LICENSE
+from logger import get_logger
+from server import start_wormhole_server
 
 
 def main():
@@ -34,10 +34,6 @@ def main():
         '-a', '--authentication', default='',
         help=('File contains username and password list '
               'for proxy authentication [default: no authentication]')
-    )
-    parser.add_argument(
-        '-c', '--cloaking', action='store_true', default=False,
-        help='Add random string to header [default: %(default)s]'
     )
     parser.add_argument(
         '-S', '--syslog-host', default='DISABLED',
@@ -73,13 +69,12 @@ def main():
             '[000000][%s]: Using event loop from uvloop.' % args.host
         )
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     try:
         loop.run_until_complete(
             start_wormhole_server(
                 args.host, args.port,
-                args.cloaking, args.authentication,
-                loop
+                args.authentication,
             )
         )
         loop.run_forever()
