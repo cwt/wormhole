@@ -22,7 +22,7 @@ async def relay_stream(
                 " ".join([str(arg) for arg in ex.args]),
             )
             logger.debug(
-                ("[{id}][{client}]: %s" % error_message).format(**ident)
+                f"[{ident['id']}][{ident['client']}]: {error_message}"
             )
             break
         else:
@@ -46,10 +46,8 @@ async def process_https(
         client_writer.write(b"\r\n")
         # HTTPS need to log here, as the connection may keep alive for long.
         logger.info(
-            (
-                "[{id}][{client}]: %s %d %s"
-                % (request_method, response_code, uri)
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"{request_method} {response_code} {uri}"
         )
 
         tasks = [
@@ -67,12 +65,11 @@ async def process_https(
             ex.__class__.__name__,
             " ".join([str(arg) for arg in ex.args]),
         )
+
     if error_message:
         logger.error(
-            (
-                "[{id}][{client}]: %s %d %s (%s)"
-                % (request_method, response_code, uri, error_message)
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"{request_method} {response_code} {uri} ({error_message})"
         )
 
 
@@ -119,21 +116,19 @@ async def process_http(
 
     path = uri[len(hostname) + 7 :]  # 7 is len('http://')
     new_head = " ".join([request_method, path, http_version])
-
     host, port = get_host_and_port(hostname, 80)
-
     try:
         req_reader, req_writer = await asyncio.open_connection(
             host, port, flags=TCP_NODELAY
         )
-        req_writer.write(("%s\r\n" % new_head).encode())
+        req_writer.write(f"{new_head}\r\n".encode())
         await req_writer.drain()
 
-        req_writer.write(b"Host: " + hostname.encode())
+        req_writer.write(f"Host: {hostname}".encode())
         req_writer.write(b"\r\n")
 
         [
-            req_writer.write((header + "\r\n").encode())
+            req_writer.write(f"{header}\r\n".encode())
             for header in request_headers
         ]
         req_writer.write(b"\r\n")
@@ -155,20 +150,17 @@ async def process_http(
 
     if response_code is None:
         response_code = int(response_status.decode("ascii").split(" ")[1])
+
     logger = get_logger()
     if error_message is None:
         logger.info(
-            (
-                "[{id}][{client}]: %s %d %s"
-                % (request_method, response_code, uri)
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"{request_method} {response_code} {uri}"
         )
     else:
         logger.error(
-            (
-                "[{id}][{client}]: %s %d %s (%s)"
-                % (request_method, response_code, uri, error_message)
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"{request_method} {response_code} {uri} ({error_message})"
         )
 
 
@@ -200,14 +192,11 @@ async def process_request(client_reader, max_retry, ident):
         while len(payload) < content_length:
             payload += await client_reader.read(1024)
     except Exception as ex:
+        name = ex.__class__.__name__
+        args = " ".join([str(arg) for arg in ex.args])
         logger.debug(
-            (
-                "[{id}][{client}]: !!! Task reject (%s: %s)"
-                % (
-                    ex.__class__.__name__,
-                    " ".join([str(arg) for arg in ex.args]),
-                )
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"!!! Task reject ({name}: {args})"
         )
 
     if header:

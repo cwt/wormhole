@@ -38,10 +38,9 @@ def debug_wormhole_semaphore(client_reader, client_writer):
     available = wormhole_semaphore._value
     logger = get_logger()
     logger.debug(
-        (
-            "[{id}][{client}]: Resource available: %.2f%% (%d/%d)"
-            % (100 * float(available) / MAX_TASKS, available, MAX_TASKS)
-        ).format(**ident)
+        f"[{ident['id']}][{ident['client']}]: "
+        "Resource available: "
+        f"{100 * available / MAX_TASKS:.2f}% ({available}/{MAX_TASKS})"
     )
 
 
@@ -54,9 +53,8 @@ async def process_wormhole(client_reader, client_writer, auth):
     )
     if not request_line:
         logger.debug(
-            ("[{id}][{client}]: !!! Task reject (empty request)").format(
-                **ident
-            )
+            f"[{ident['id']}][{ident['client']}]: "
+            "!!! Task reject (empty request)"
         )
         return
 
@@ -68,9 +66,8 @@ async def process_wormhole(client_reader, client_writer, auth):
         request_method, uri, http_version = request_fields
     else:
         logger.debug(
-            ("[{id}][{client}]: !!! Task reject (invalid request)").format(
-                **ident
-            )
+            f"[{ident['id']}][{ident['client']}]: "
+            "!!! Task reject (invalid request)"
         )
         return
 
@@ -78,9 +75,8 @@ async def process_wormhole(client_reader, client_writer, auth):
         user_ident = await verify(client_reader, client_writer, headers, auth)
         if user_ident is None:
             logger.info(
-                ("[{id}][{client}]: %s 407 %s" % (request_method, uri)).format(
-                    **ident
-                )
+                f"[{ident['id']}][{ident['client']}]: "
+                f"{request_method} 407 {uri}"
             )
             return
         ident = user_ident
@@ -129,13 +125,11 @@ def accept_client(client_reader, client_writer, auth):
         del clients[task]
         client_writer.close()
         logger.debug(
-            (
-                "[{id}][{client}]: Connection closed (%.5f seconds)"
-                % (time() - started_time)
-            ).format(**ident)
+            f"[{ident['id']}][{ident['client']}]: "
+            f"Connection closed ({time() - started_time:.5f} seconds)"
         )
 
-    logger.debug(("[{id}][{client}]: Connection started").format(**ident))
+    logger.debug(f"[{ident['id']}][{ident['client']}]: Connection started")
     task.add_done_callback(client_done)
 
 
@@ -146,12 +140,10 @@ async def start_wormhole_server(host, port, auth):
         server = await asyncio.start_server(accept, host, port)
     except OSError as ex:
         logger.critical(
-            "[000000][%s]: !!! Failed to bind server at [%s:%d]: %s"
-            % (host, host, port, ex.args[1])
+            f"[000000][{host}]: "
+            f"!!! Failed to bind server at [{host}:{port}]: {ex.args[1]}"
         )
         raise
     else:
-        logger.info(
-            "[000000][%s]: wormhole bound at %s:%d" % (host, host, port)
-        )
+        logger.info(f"[000000][{host}]: wormhole bound at {host}:{port}")
         return server

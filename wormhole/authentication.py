@@ -4,7 +4,7 @@ from base64 import decodebytes
 def get_ident(client_reader, client_writer, user=None):
     client = client_writer.get_extra_info("peername")[0]
     if user:
-        client = "%s@%s" % (user, client)
+        client = f"{user}@{client}"
     return {"id": hex(id(client_reader))[-6:], "client": client}
 
 

@@ -24,8 +24,9 @@ def main():
     port and provides `--help` message.
     """
     parser = ArgumentParser(
-        description="Wormhole(%s): Asynchronous IO HTTP and HTTPS Proxy"
-        % VERSION
+        description=(
+            f"Wormhole({VERSION}): Asynchronous IO HTTP and HTTPS Proxy"
+        )
     )
     parser.add_argument(
         "-H",
@@ -86,7 +87,7 @@ def main():
     except ImportError:
         pass
     else:
-        logger.debug("[000000][%s]: Using event loop from uvloop." % args.host)
+        logger.debug(f"[000000][{args.host}]: Using event loop from uvloop.")
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.new_event_loop()
     try:
