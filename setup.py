@@ -7,42 +7,42 @@ from wormhole.version import VERSION
 
 
 def readme():
-    with open('README.rst', encoding = 'utf-8') as readme_file:
-        return '\n' + readme_file.read()
+    with open("README.rst", encoding="utf-8") as readme_file:
+        return "\n" + readme_file.read()
 
 
 setup(
-    name='wormhole-proxy',
-    version=VERSION.replace('v',''),  # normalize version from vd.d to d.d
-    author='Chaiwat Suttipongsakul',
-    author_email='cwt@bashell.com',
-    url='https://bitbucket.org/bashell-com/wormhole',
-    license='MIT',
-    description='Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.5.3',
+    name="wormhole-proxy",
+    version=VERSION.replace("v", ""),  # normalize version from vd.d to d.d
+    author="Chaiwat Suttipongsakul",
+    author_email="cwt@bashell.com",
+    url="https://bitbucket.org/bashell-com/wormhole",
+    license="MIT",
+    description="Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.5.3",
     long_description=readme(),
-    keywords='wormhole asynchronous web proxy',
+    keywords="wormhole asynchronous web proxy",
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Environment :: Console',
-        'Intended Audience :: Information Technology',
-        'Intended Audience :: System Administrators',
-        'License :: OSI Approved :: MIT License',
-        'Operating System :: POSIX',
-        'Operating System :: Microsoft :: Windows',
-        'Programming Language :: Python :: 3.5.3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Topic :: Internet :: Proxy Servers',
+        "Development Status :: 5 - Production/Stable",
+        "Environment :: Console",
+        "Intended Audience :: Information Technology",
+        "Intended Audience :: System Administrators",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX",
+        "Operating System :: Microsoft :: Windows",
+        "Programming Language :: Python :: 3.5.3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Topic :: Internet :: Proxy Servers",
     ],
     install_requires=[
         'pywin32;platform_system=="Windows"',
         'uvloop;platform_system=="Linux"',
     ],
-    packages=['wormhole'],
+    packages=["wormhole"],
     include_package_data=True,
-    entry_points={'console_scripts': ['wormhole = wormhole.proxy:main']},
+    entry_points={"console_scripts": ["wormhole = wormhole.proxy:main"]},
 )

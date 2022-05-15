@@ -1,13 +1,10 @@
 import re
 
 
-REGEX_HOST = re.compile(
-    r'(.+?):([0-9]{1,5})'
-)
+REGEX_HOST = re.compile(r"(.+?):([0-9]{1,5})")
 
 REGEX_CONTENT_LENGTH = re.compile(
-    r'\r\nContent-Length: ([0-9]+)\r\n',
-    re.IGNORECASE
+    r"\r\nContent-Length: ([0-9]+)\r\n", re.IGNORECASE
 )
 
 
