@@ -5,12 +5,18 @@ if sys.version_info < (3, 5):
     print('Error: You need python 3.5.0 or above.')
     exit(1)
 
+import os
+from pathlib import Path
+sys.path.insert(
+    0, Path(os.path.realpath(__file__)).parent.as_posix()
+)
+
 import asyncio
 from argparse import ArgumentParser
-from wormhole.license import LICENSE
-from wormhole.logger import get_logger
-from wormhole.server import start_wormhole_server
-from wormhole.version import VERSION
+from license import LICENSE
+from logger import get_logger
+from server import start_wormhole_server
+from version import VERSION
 
 
 def main():

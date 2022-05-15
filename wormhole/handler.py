@@ -1,8 +1,8 @@
 import asyncio
 from socket import TCP_NODELAY
-from wormhole.logger import get_logger
-from wormhole.tools import get_content_length
-from wormhole.tools import get_host_and_port
+from logger import get_logger
+from tools import get_content_length
+from tools import get_host_and_port
 
 
 async def relay_stream(stream_reader, stream_writer,
