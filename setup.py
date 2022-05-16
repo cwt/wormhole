@@ -16,7 +16,7 @@ setup(
     version=VERSION.replace("v", ""),  # normalize version from vd.d to d.d
     author="Chaiwat Suttipongsakul",
     author_email="cwt@bashell.com",
-    url="https://bitbucket.org/bashell-com/wormhole",
+    url="https://hg.sr.ht/~cwt/wormhole",
     license="MIT",
     description="Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.5.3",
     long_description=readme(),
