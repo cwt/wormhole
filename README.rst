@@ -64,22 +64,22 @@ You can install the **development snapshot** using ``pip`` with ``mercurial``:
 
 .. code:: shell
 
-    $ pip install hg+https://bitbucket.org/bashell-com/wormhole
+    $ pip install hg+https://hg.sr.ht/~cwt/wormhole
 
 Or install from your local clone:
 
 .. code:: shell
 
-    $ hg clone https://bitbucket.org/bashell-com/wormhole
+    $ hg clone https://hg.sr.ht/~cwt/wormhole
     $ cd wormhole/
     $ pip install -e .
 
-You can also install the latest ``default`` snapshot using the following
+You can also install the latest ``tip`` snapshot using the following
 command:
 
 .. code:: shell
 
-    $ pip install https://bitbucket.org/bashell-com/wormhole/get/default.tar.gz
+    $ pip install https://hg.sr.ht/~cwt/wormhole/archive/tip.tar.gz
 
 How to use
 ----------
@@ -107,7 +107,7 @@ Command help
 License
 -------
 
-MIT License (included in `license.py <https://goo.gl/2J8rcu>`_)
+MIT License (included in `license.py <https://bit.ly/wormhole-proxy-license>`_)
 
 Notice
 ------
