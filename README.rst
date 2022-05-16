@@ -11,7 +11,7 @@ Wormhole
 Dependency
 ----------
 
--  Python >= 3.5.3
+-  Python >= 3.6
 -  `uvloop <https://github.com/MagicStack/uvloop>`_ (optional)
 
 Docker Image Usage

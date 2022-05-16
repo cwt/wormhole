@@ -2,8 +2,8 @@
 
 import sys
 
-if sys.version_info < (3, 5):
-    print("Error: You need python 3.5.0 or above.")
+if sys.version_info < (3, 6):
+    print("Error: You need python 3.6 or newer.")
     exit(1)
 
 import os

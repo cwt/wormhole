@@ -18,7 +18,7 @@ setup(
     author_email="cwt@bashell.com",
     url="https://hg.sr.ht/~cwt/wormhole",
     license="MIT",
-    description="Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.5.3",
+    description="Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.6",
     long_description=readme(),
     keywords="wormhole asynchronous web proxy",
     classifiers=[
@@ -29,7 +29,6 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
