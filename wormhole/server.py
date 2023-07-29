@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import socket
 import sys
 from time import time
 from authentication import get_ident
@@ -7,45 +8,27 @@ from authentication import verify
 from handler import process_http
 from handler import process_https
 from handler import process_request
-from logger import get_logger
-
+from logger import Logger
 
 MAX_RETRY = 3
 if sys.platform == "win32":
     import win32file
 
-    MAX_TASKS = win32file._getmaxstdio()
+    FREE_TASKS = asyncio.Semaphore(
+        int(0.9 * win32file._getmaxstdio()))
 else:
     import resource
 
-    MAX_TASKS = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-
-
-wormhole_semaphore = None
-
-
-def get_wormhole_semaphore():
-    max_wormholes = int(0.9 * MAX_TASKS)  # Use only 90% of open files limit.
-    global wormhole_semaphore
-    if wormhole_semaphore is None:
-        wormhole_semaphore = asyncio.Semaphore(max_wormholes)
-    return wormhole_semaphore
-
-
-def debug_wormhole_semaphore(client_reader, client_writer):
-    global wormhole_semaphore
-    ident = get_ident(client_reader, client_writer)
-    available = wormhole_semaphore._value
-    logger = get_logger()
-    logger.debug(
-        f"[{ident['id']}][{ident['client']}]: "
-        "Resource available: "
-        f"{100 * available / MAX_TASKS:.2f}% ({available}/{MAX_TASKS})"
+    FREE_TASKS = asyncio.Semaphore(
+        int(0.9 * resource.getrlimit(resource.RLIMIT_NOFILE)[0])
     )
+MAX_TASKS = FREE_TASKS._value
+
+clients = dict()
 
 
 async def process_wormhole(client_reader, client_writer, auth):
-    logger = get_logger()
+    logger = Logger().get_logger()
     ident = get_ident(client_reader, client_writer)
 
     request_line, headers, payload = await process_request(
@@ -53,8 +36,7 @@ async def process_wormhole(client_reader, client_writer, auth):
     )
     if not request_line:
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: "
-            "!!! Task reject (empty request)"
+            f"[{ident['id']}][{ident['client']}]: !!! Task reject (empty request)"
         )
         return
 
@@ -66,8 +48,7 @@ async def process_wormhole(client_reader, client_writer, auth):
         request_method, uri, http_version = request_fields
     else:
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: "
-            "!!! Task reject (invalid request)"
+            f"[{ident['id']}][{ident['client']}]: !!! Task reject (invalid request)"
         )
         return
 
@@ -75,47 +56,34 @@ async def process_wormhole(client_reader, client_writer, auth):
         user_ident = await verify(client_reader, client_writer, headers, auth)
         if user_ident is None:
             logger.info(
-                f"[{ident['id']}][{ident['client']}]: "
-                f"{request_method} 407 {uri}"
+                f"[{ident['id']}][{ident['client']}]: {request_method} 407 {uri}"
             )
             return
         ident = user_ident
 
     if request_method == "CONNECT":
-        async with get_wormhole_semaphore():
-            debug_wormhole_semaphore(client_reader, client_writer)
+        async with FREE_TASKS:
+            logger.debug(
+                f"[{ident['id']}][{ident['client']}]: {FREE_TASKS._value}/{MAX_TASKS} Resource available"
+            )
             return await process_https(
                 client_reader, client_writer, request_method, uri, ident
             )
     else:
-        async with get_wormhole_semaphore():
-            debug_wormhole_semaphore(client_reader, client_writer)
+        async with FREE_TASKS:
+            logger.debug(
+                f"[{ident['id']}][{ident['client']}]: {FREE_TASKS._value}/{MAX_TASKS} Resource available"
+            )
             return await process_http(
-                client_writer,
-                request_method,
-                uri,
-                http_version,
-                headers,
-                payload,
-                ident,
+                client_writer, request_method, uri, http_version, headers, payload, ident,
             )
 
 
-async def limit_wormhole(client_reader, client_writer, auth):
-    async with get_wormhole_semaphore():
-        debug_wormhole_semaphore(client_reader, client_writer)
-        await process_wormhole(client_reader, client_writer, auth)
-        debug_wormhole_semaphore(client_reader, client_writer)
-
-
-clients = dict()
-
-
-def accept_client(client_reader, client_writer, auth):
-    logger = get_logger()
+async def accept_client(client_reader, client_writer, auth):
+    logger = Logger().get_logger()
     ident = get_ident(client_reader, client_writer)
     task = asyncio.ensure_future(
-        limit_wormhole(client_reader, client_writer, auth)
+        process_wormhole(client_reader, client_writer, auth)
     )
     global clients
     clients[task] = (client_reader, client_writer)
@@ -125,8 +93,7 @@ def accept_client(client_reader, client_writer, auth):
         del clients[task]
         client_writer.close()
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: "
-            f"Connection closed ({time() - started_time:.5f} seconds)"
+            f"[{ident['id']}][{ident['client']}]: Connection closed ({time() - started_time:.5f} seconds)"
         )
 
     logger.debug(f"[{ident['id']}][{ident['client']}]: Connection started")
@@ -134,14 +101,19 @@ def accept_client(client_reader, client_writer, auth):
 
 
 async def start_wormhole_server(host, port, auth):
-    logger = get_logger()
+    logger = Logger().get_logger()
     try:
         accept = functools.partial(accept_client, auth=auth)
-        server = await asyncio.start_server(accept, host, port)
+        # Check if the host string contains an IPv6 address
+        is_ipv6 = ":" in host
+        if is_ipv6:
+            family = socket.AF_INET6
+        else:
+            family = socket.AF_INET
+        server = await asyncio.start_server(accept, host, port, family=family)
     except OSError as ex:
         logger.critical(
-            f"[000000][{host}]: "
-            f"!!! Failed to bind server at [{host}:{port}]: {ex.args[1]}"
+            f"[000000][{host}]: !!! Failed to bind server at [{host}:{port}]: {ex.args[1]}"
         )
         raise
     else:

@@ -14,9 +14,25 @@ sys.path.insert(0, Path(os.path.realpath(__file__)).parent.as_posix())
 import asyncio
 from argparse import ArgumentParser
 from license import LICENSE
-from logger import get_logger
-from server import start_wormhole_server
+from logger import Logger
 from version import VERSION
+
+
+def start_server(host, port, authentication):
+    from server import start_wormhole_server
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_wormhole_server(host, port, authentication))
+    loop.run_forever()
+
+
+def check_uvloop():
+    try:
+        import uvloop
+    except ImportError:
+        return False
+    else:
+        return True
 
 
 def main():
@@ -81,31 +97,26 @@ def main():
     if not (1 <= args.port <= 65535):
         parser.error("port must be 1-65535")
 
-    logger = get_logger(args.syslog_host, args.syslog_port, args.verbose)
-    try:
-        import uvloop
-    except ImportError:
-        pass
-    else:
-        logger.debug(f"[000000][{args.host}]: Using event loop from uvloop.")
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(
-            start_wormhole_server(
-                args.host,
-                args.port,
-                args.authentication,
-            )
+    logger = Logger(
+        args.syslog_host, args.syslog_port, args.verbose
+    ).get_logger()
+    if args.verbose:
+        logger.debug(
+            f"[000000][{args.host}]: Using {'uvloop' if check_uvloop() else 'default event loop'}."
         )
-        loop.run_forever()
-    except OSError:
-        pass
-    except KeyboardInterrupt:
-        print("bye")
-    finally:
-        loop.close()
+
+    if check_uvloop():
+        import uvloop
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+    start_server(args.host, args.port, args.authentication)
 
 
 if __name__ == "__main__":
-    exit(main())
+    try:
+        exit(main())
+    except OSError:
+        pass
+    except KeyboardInterrupt:
+        print("\nbye")

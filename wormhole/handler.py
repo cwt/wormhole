@@ -1,6 +1,6 @@
 import asyncio
 from socket import TCP_NODELAY
-from logger import get_logger
+from logger import Logger
 from tools import get_content_length
 from tools import get_host_and_port
 
@@ -8,11 +8,11 @@ from tools import get_host_and_port
 async def relay_stream(
     stream_reader, stream_writer, ident, return_first_line=False
 ):
-    logger = get_logger()
+    logger = Logger().get_logger()
     first_line = None
     while True:
         try:
-            line = await stream_reader.read(1024)
+            line = await stream_reader.read(4096)
             if len(line) == 0:
                 break
             stream_writer.write(line)
@@ -21,9 +21,7 @@ async def relay_stream(
                 ex.__class__.__name__,
                 " ".join([str(arg) for arg in ex.args]),
             )
-            logger.debug(
-                f"[{ident['id']}][{ident['client']}]: {error_message}"
-            )
+            logger.debug(f"[{ident['id']}][{ident['client']}]: {error_message}")
             break
         else:
             if return_first_line and first_line is None:
@@ -37,7 +35,7 @@ async def process_https(
     response_code = 200
     error_message = None
     host, port = get_host_and_port(uri)
-    logger = get_logger()
+    logger = Logger().get_logger()
     try:
         req_reader, req_writer = await asyncio.open_connection(
             host, port, ssl=False
@@ -51,14 +49,10 @@ async def process_https(
         )
 
         tasks = [
-            asyncio.ensure_future(
-                relay_stream(client_reader, req_writer, ident)
-            ),
-            asyncio.ensure_future(
-                relay_stream(req_reader, client_writer, ident)
-            ),
+            relay_stream(client_reader, req_writer, ident),
+            relay_stream(req_reader, client_writer, ident),
         ]
-        await asyncio.wait(tasks)
+        await asyncio.gather(*tasks)
     except Exception as ex:
         response_code = 502
         error_message = "%s: %s" % (
@@ -151,7 +145,7 @@ async def process_http(
     if response_code is None:
         response_code = int(response_status.decode("ascii").split(" ")[1])
 
-    logger = get_logger()
+    logger = Logger().get_logger()
     if error_message is None:
         logger.info(
             f"[{ident['id']}][{ident['client']}]: "
@@ -165,7 +159,7 @@ async def process_http(
 
 
 async def process_request(client_reader, max_retry, ident):
-    logger = get_logger()
+    logger = Logger().get_logger()
     request_line = ""
     headers = []
     header = ""
@@ -190,7 +184,7 @@ async def process_request(client_reader, max_retry, ident):
 
         content_length = get_content_length(header)
         while len(payload) < content_length:
-            payload += await client_reader.read(1024)
+            payload += await client_reader.read(4096)
     except Exception as ex:
         name = ex.__class__.__name__
         args = " ".join([str(arg) for arg in ex.args])
