@@ -5,7 +5,6 @@ import sys
 from time import time
 from authentication import get_ident, verify
 from handler import process_http, process_https, process_request
-
 from logger import Logger
 
 
@@ -20,12 +19,15 @@ else:
 
     MAX_TASKS: int = int(0.9 * resource.getrlimit(resource.RLIMIT_NOFILE)[0])
 
+CURRENT_TASKS = 0
+
 
 async def process_wormhole(
     client_reader: asyncio.StreamReader,
     client_writer: asyncio.StreamWriter,
     auth: str | None,
 ) -> None:
+    global CURRENT_TASKS
     logger = Logger().get_logger()
     ident = get_ident(client_reader, client_writer)
 
@@ -62,23 +64,32 @@ async def process_wormhole(
             return
         ident = user_ident
 
-    async with asyncio.TaskGroup() as tg:
-        if request_method == "CONNECT":
-            tg.create_task(
-                process_https(client_reader, client_writer, request_method, uri, ident)
-            )
-        else:
-            tg.create_task(
-                process_http(
-                    client_writer,
-                    request_method,
-                    uri,
-                    http_version,
-                    headers,
-                    payload,
-                    ident,
+    CURRENT_TASKS += 1
+    logger.debug(
+        f"[{ident['id']}][{ident['client']}]: {CURRENT_TASKS}/{MAX_TASKS} Tasks active"
+    )
+    try:
+        async with asyncio.TaskGroup() as tg:
+            if request_method == "CONNECT":
+                tg.create_task(
+                    process_https(
+                        client_reader, client_writer, request_method, uri, ident
+                    )
                 )
-            )
+            else:
+                tg.create_task(
+                    process_http(
+                        client_writer,
+                        request_method,
+                        uri,
+                        http_version,
+                        headers,
+                        payload,
+                        ident,
+                    )
+                )
+    finally:
+        CURRENT_TASKS -= 1
 
 
 async def accept_client(
