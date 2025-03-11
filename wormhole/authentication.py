@@ -27,7 +27,7 @@ def get_auth_list(auth: str) -> list[str]:
     return auth_list
 
 
-def deny(client_writer: asyncio.StreamWriter) -> None:
+async def deny(client_writer: asyncio.StreamWriter) -> None:
     messages = (
         b"HTTP/1.1 407 Proxy Authentication Required\r\n",
         b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
@@ -35,6 +35,7 @@ def deny(client_writer: asyncio.StreamWriter) -> None:
     )
     for message in messages:
         client_writer.write(message)
+    await client_writer.drain()
 
 
 async def verify(
@@ -51,5 +52,5 @@ async def verify(
         )
         if user_password in get_auth_list(auth):
             return get_ident(client_reader, client_writer, user_password.split(":")[0])
-    deny(client_writer)
+    await deny(client_writer)
     return None
