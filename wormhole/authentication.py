@@ -1,49 +1,55 @@
 from base64 import decodebytes
+import asyncio
 
 
-def get_ident(client_reader, client_writer, user=None):
+def get_ident(
+    client_reader: asyncio.StreamReader,
+    client_writer: asyncio.StreamWriter,
+    user: str | None = None,
+) -> dict[str, str]:
     client = client_writer.get_extra_info("peername")[0]
     if user:
         client = f"{user}@{client}"
     return {"id": hex(id(client_reader))[-6:], "client": client}
 
 
-auth_list = list()
+auth_list: list[str] = []
 
 
-def get_auth_list(auth):
+def get_auth_list(auth: str) -> list[str]:
     global auth_list
     if not auth_list:
-        auth_list = [
-            line.strip()
-            for line in open(auth, "r")
-            if line.strip() and not line.strip().startswith("#")
-        ]
+        with open(auth, "r") as f:
+
+            auth_list = [
+                line.strip() for line in f if line.strip() and not line.startswith("#")
+            ]
     return auth_list
 
 
-def deny(client_writer):
-    [
+def deny(client_writer: asyncio.StreamWriter) -> None:
+    messages = (
+        b"HTTP/1.1 407 Proxy Authentication Required\r\n",
+        b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
+        b"\r\n",
+    )
+    for message in messages:
         client_writer.write(message)
-        for message in (
-            b"HTTP/1.1 407 Proxy Authentication Required\r\n",
-            b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n',
-            b"\r\n",
-        )
-    ]
 
 
-async def verify(client_reader, client_writer, headers, auth):
-    proxy_auth = [
-        header
-        for header in headers
-        if header.lower().startswith("proxy-authorization:")
-    ]
+async def verify(
+    client_reader: asyncio.StreamReader,
+    client_writer: asyncio.StreamWriter,
+    headers: list[str],
+    auth: str,
+) -> dict[str, str] | None:
+    proxy_auth = [h for h in headers if h.lower().startswith("proxy-authorization:")]
     if proxy_auth:
-        user_password = decodebytes(
-            proxy_auth[0].split(" ")[2].encode("ascii")
-        ).decode("ascii")
+
+        user_password = decodebytes(proxy_auth[0].split(" ")[2].encode("ascii")).decode(
+            "ascii"
+        )
         if user_password in get_auth_list(auth):
-            user = user_password.split(":")[0]
-            return get_ident(client_reader, client_writer, user)
-    return deny(client_writer)
+            return get_ident(client_reader, client_writer, user_password.split(":")[0])
+    deny(client_writer)
+    return None

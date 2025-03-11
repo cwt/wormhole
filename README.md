@@ -10,8 +10,9 @@
 
 ## Dependency
 
--   Python \>= 3.6
+-   Python \>= 3.11
 -   [uvloop](https://github.com/MagicStack/uvloop) (optional)
+-   [winloop](https://github.com/Vizonex/Winloop) (optional for Windows)
 
 ## Docker Image Usage
 
@@ -99,7 +100,7 @@ $ wormhole --help
 # License
 
 MIT License (included in
-[license.py](https://bit.ly/wormhole-proxy-license))
+[license.py](https://hg.sr.ht/~cwt/wormhole/raw/wormhole/license.py))
 
 # Notice
 
@@ -110,5 +111,5 @@ MIT License (included in
 -   Wormhole may not work in:
     -   some ISPs
     -   some firewalls
-    -   some browers
+    -   some browsers
     -   some web sites

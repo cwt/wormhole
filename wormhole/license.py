@@ -3,7 +3,7 @@
 LICENSE = """
 The MIT License (MIT)
 
-Copyright (c) 2016 cwt(at)bashell(dot)com
+Copyright (c) 2016-2025 cwt(at)bashell(dot)com
 Copyright (c) 2013 devunt(at)gmail(dot)com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
