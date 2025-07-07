@@ -1,3 +1,3 @@
-from proxy import main
+from .proxy import main
 
 exit(main())

@@ -1,186 +1,215 @@
-import asyncio
+from .logger import logger
+from .tools import get_content_length, get_host_and_port
 from socket import TCP_NODELAY
-from logger import Logger
-from tools import get_content_length, get_host_and_port
+import asyncio
 
 
 async def relay_stream(
-    stream_reader: asyncio.StreamReader,
-    stream_writer: asyncio.StreamWriter,
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
     ident: dict[str, str],
     return_first_line: bool = False,
 ) -> bytes | None:
-    # Initialize logger for debugging and info logging
-    logger = Logger().get_logger()
-    first_line = None
+    """
+    Relays data between a reader and a writer stream until EOF.
 
-    # Relay data between reader and writer with proper async handling
-    while True:
-        try:
-            # Read data asynchronously from the stream
-            line = await stream_reader.read(4096)
-            if not line:
+    Args:
+        reader: The stream to read data from.
+        writer: The stream to write data to.
+        ident: A dictionary with 'id' and 'client' for logging.
+        return_first_line: If True, captures and returns the first line.
+
+    Returns:
+        The first line of the stream as bytes if requested, otherwise None.
+    """
+    first_line: bytes | None = None
+    try:
+        while not reader.at_eof():
+            data = await reader.read(4096)
+            if not data:
                 break
 
-            # Write data and ensure buffer is flushed asynchronously
-            stream_writer.write(line)
-            await stream_writer.drain()  # Ensure no blocking if buffer is full
-        except Exception as ex:
-            # Log any exceptions during relay
-            logger.debug(
-                f"[{ident['id']}][{ident['client']}]: {ex.__class__.__name__}: {' '.join(map(str, ex.args))}"
-            )
-            break
-        else:
-            # Capture first line if requested
             if return_first_line and first_line is None:
-                first_line = line[: line.find(b"\r\n")]
+                if end_of_line := data.find(b"\r\n"):
+                    first_line = data[:end_of_line]
 
+            writer.write(data)
+            await writer.drain()
+    except (ConnectionResetError, BrokenPipeError) as e:
+        logger.debug(
+            f"[{ident['id']}][{ident['client']}]: Relay network error: {e}"
+        )
+    except Exception as e:
+        logger.error(
+            f"[{ident['id']}][{ident['client']}]: Unexpected relay error: {e}",
+            exc_info=True,
+        )
+    finally:
+        if not writer.is_closing():
+            writer.close()
+            await writer.wait_closed()
     return first_line
 
 
-async def process_https(
+# --- Core Request Handlers ---
+
+
+async def process_https_tunnel(
     client_reader: asyncio.StreamReader,
     client_writer: asyncio.StreamWriter,
-    request_method: str,
+    method: str,
     uri: str,
     ident: dict[str, str],
 ) -> None:
-    # Initialize logger for tracking request status
-    logger = Logger().get_logger()
+    """Establishes an HTTPS tunnel and relays data between client and server."""
     host, port = get_host_and_port(uri)
+    server_reader = None
+    server_writer = None
 
     try:
-        # Open connection to target server without SSL (tunneling)
-        req_reader, req_writer = await asyncio.open_connection(host, port, ssl=False)
+        # Establish a standard TCP connection to the target server.
+        server_reader, server_writer = await asyncio.open_connection(host, port)
 
-        # Send success response to client
+        # Signal the client that the tunnel is established.
         client_writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
-        await client_writer.drain()  # Ensure response is sent
+        await client_writer.drain()
 
-        # Relay data bidirectionally between client and target server
-        await asyncio.gather(
-            relay_stream(client_reader, req_writer, ident),
-            relay_stream(req_reader, client_writer, ident),
-        )
+        # Use a TaskGroup for structured concurrency to relay data in both directions.
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(relay_stream(client_reader, server_writer, ident))
+            tg.create_task(relay_stream(server_reader, client_writer, ident))
 
-        # Log successful tunneling
-        logger.info(f"[{ident['id']}][{ident['client']}]: {request_method} 200 {uri}")
-    except Exception as ex:
-        # Log errors during HTTPS processing
+        logger.info(f"[{ident['id']}][{ident['client']}]: {method} 200 {uri}")
+
+    except Exception as e:
         logger.error(
-            f"[{ident['id']}][{ident['client']}]: {request_method} 502 {uri} ({ex.__class__.__name__}: {' '.join(map(str, ex.args))})"
+            f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
         )
+    finally:
+        # Ensure server streams are closed if they were opened.
+        if server_writer and not server_writer.is_closing():
+            server_writer.close()
+            await server_writer.wait_closed()
 
 
-async def process_http(
+async def process_http_request(
     client_writer: asyncio.StreamWriter,
-    request_method: str,
+    method: str,
     uri: str,
-    http_version: str,
+    version: str,
     headers: list[str],
     payload: bytes,
     ident: dict[str, str],
 ) -> None:
-    # Initialize logger for request tracking
-    logger = Logger().get_logger()
-    hostname = "127.0.0.1"
-    request_headers = []
-    has_connection = False
-
-    # Process headers efficiently
-    for header in headers:
-        if ": " in header:
-            name, value = header.split(": ", 1)
-            match name.lower():
-                case "host":
-                    hostname = value
-                case "connection":
-                    has_connection = True
-                    request_headers.append(
-                        "Connection: close"
-                        if value.lower() in ("keep-alive", "persist")
-                        else header
-                    )
-                case "proxy-connection":
-                    continue
-                case _:
-                    request_headers.append(header)
-
-    if not has_connection:
-        request_headers.append("Connection: close")
-
-    # Construct new request path and headers
-    path = uri.removeprefix(f"http://{hostname}")
-    new_head = f"{request_method} {path} {http_version}"
-    host, port = get_host_and_port(hostname, "80")
+    """Processes a standard HTTP request by forwarding it to the target server."""
+    server_reader = None
+    server_writer = None
 
     try:
-        # Open connection to target server with TCP_NODELAY for performance
-        req_reader, req_writer = await asyncio.open_connection(
+        # Extract host from headers, defaulting to a safe value.
+        host_header = next(
+            (
+                h.split(": ", 1)[1]
+                for h in headers
+                if h.lower().startswith("host:")
+            ),
+            "127.0.0.1",
+        )
+        host, port = get_host_and_port(host_header, default_port="80")
+
+        # Rebuild headers for the target server.
+        # - Remove proxy-specific headers.
+        # - Ensure 'Connection: close' is set to prevent keep-alive issues.
+        request_headers = [
+            h for h in headers if not h.lower().startswith("proxy-")
+        ]
+        if not any(
+            h.lower().startswith("connection:") for h in request_headers
+        ):
+            request_headers.append("Connection: close")
+
+        # Reconstruct the request line and headers.
+        path = uri.removeprefix(f"http://{host_header}")
+        request_line = f"{method} {path} {version}".encode()
+        headers_bytes = "\r\n".join(request_headers).encode()
+
+        # Connect to the target server.
+        server_reader, server_writer = await asyncio.open_connection(
             host, port, flags=TCP_NODELAY
         )
 
-        # Write request headers and payload asynchronously
-        req_writer.write(f"{new_head}\r\nHost: {hostname}\r\n".encode())
-        for header in request_headers:
-            req_writer.write(f"{header}\r\n".encode())
-        req_writer.write(b"\r\n")
+        # Send the reconstructed request.
+        server_writer.write(
+            request_line + b"\r\n" + headers_bytes + b"\r\n\r\n"
+        )
         if payload:
-            req_writer.write(payload)
-        await req_writer.drain()  # Ensure all data is sent
+            server_writer.write(payload)
+        await server_writer.drain()
 
-        # Relay response and get status code
-        response_status = await relay_stream(req_reader, client_writer, ident, True)
+        # Relay the server's response back to the client.
+        response_status_line = await relay_stream(
+            server_reader, client_writer, ident, return_first_line=True
+        )
+
+        # Log the outcome.
         response_code = (
-            int(response_status.decode("ascii").split(" ")[1])
-            if response_status
+            int(response_status_line.split(b" ")[1])
+            if response_status_line
             else 502
         )
-
-        # Log request outcome
         logger.info(
-            f"[{ident['id']}][{ident['client']}]: {request_method} {response_code} {uri}"
+            f"[{ident['id']}][{ident['client']}]: {method} {response_code} {uri}"
         )
-    except Exception as ex:
-        # Log errors during HTTP processing
+
+    except Exception as e:
         logger.error(
-            f"[{ident['id']}][{ident['client']}]: {request_method} 502 {uri} ({ex.__class__.__name__}: {' '.join(map(str, ex.args))})"
+            f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
         )
+    finally:
+        # Ensure server streams are closed if they were opened.
+        if server_writer and not server_writer.is_closing():
+            server_writer.close()
+            await server_writer.wait_closed()
 
 
-async def process_request(
+async def parse_request(
     client_reader: asyncio.StreamReader, max_retry: int, ident: dict[str, str]
-) -> tuple[str, list[str], bytes]:
-    # Initialize logger for debugging
-    logger = Logger().get_logger()
-    payload = b""
-    retry = 0
+) -> tuple[str, list[str], bytes] | tuple[None, None, None]:
+    """
+    Parses the initial request from the client.
 
-    # Read headers until double CRLF efficiently
+    Reads from the client stream to get the request line, headers, and payload.
+    Includes a simple retry mechanism for slow or incomplete initial reads.
+
+    Returns:
+        A tuple of (request_line, headers, payload) or (None, None, None) on failure.
+    """
     try:
-        header_bytes = await client_reader.readuntil(b"\r\n\r\n")
-        header = header_bytes.decode("ascii")
-    except asyncio.IncompleteReadError:
-        # Retry on incomplete read up to max_retry
-        while retry < max_retry:
-            retry += 1
-            await asyncio.sleep(0.1)
-            try:
-                header_bytes = await client_reader.readuntil(b"\r\n\r\n")
-                header = header_bytes.decode("ascii")
-                break
-            except asyncio.IncompleteReadError:
-                continue
-        else:
-            # If retries exhausted, return empty result
-            return "", [], b""
+        # Read headers until the double CRLF, with a timeout to prevent hanging.
+        header_bytes = await asyncio.wait_for(
+            client_reader.readuntil(b"\r\n\r\n"), timeout=5.0
+        )
+    except (asyncio.IncompleteReadError, asyncio.TimeoutError) as e:
+        logger.debug(
+            f"[{ident['id']}][{ident['client']}]: Failed to read initial request: {e}"
+        )
+        return None, None, None
 
-    # Extract content length and read payload
-    content_length = get_content_length(header)
-    if content_length > 0:
-        payload = await client_reader.readexactly(content_length)
+    # Decode headers and split into lines.
+    header_str = header_bytes.decode("ascii", errors="ignore")
+    header_lines = header_str.strip().split("\r\n")
+    request_line = header_lines[0]
+    headers = header_lines[1:]
 
-    # Split headers into lines
-    header_lines = header.split("\r\n")
-    return header_lines[0], header_lines[1:-1] if len(header_lines) > 2 else [], payload
+    # Read the payload if Content-Length is specified.
+    payload = b""
+    if content_length := get_content_length(header_str):
+        try:
+            payload = await client_reader.readexactly(content_length)
+        except asyncio.IncompleteReadError:
+            logger.debug(
+                f"[{ident['id']}][{ident['client']}]: Incomplete payload read."
+            )
+            return None, None, None
+
+    return request_line, headers, payload
