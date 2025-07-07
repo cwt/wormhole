@@ -1,7 +1,17 @@
 from .logger import logger
+from .safeguards import has_public_ipv6, is_private_ip
 from .tools import get_content_length, get_host_and_port
 from socket import TCP_NODELAY
 import asyncio
+import ipaddress
+import random
+import time
+
+# --- DNS Cache for Performance ---
+DNS_CACHE: dict[str, tuple[str, float]] = {}
+DNS_CACHE_TTL: int = 300  # Cache DNS results for 5 minutes
+
+# --- Modernized Relay Stream Function ---
 
 
 async def relay_stream(
@@ -51,6 +61,74 @@ async def relay_stream(
     return first_line
 
 
+async def _resolve_and_validate_host(host: str) -> str:
+    """
+    Resolves a hostname to an IP, validates it against private ranges, and caches it.
+    Supports DNS load balancing and prioritizes IPv6 if available.
+
+    Raises:
+        PermissionError: If all resolved IPs are private/reserved addresses.
+        OSError: If the host cannot be resolved.
+    """
+    # Check cache first
+    if host in DNS_CACHE:
+        ip, timestamp = DNS_CACHE[host]
+        if time.time() - timestamp < DNS_CACHE_TTL:
+            logger.debug(
+                f"DNS cache hit for '{host}'. ({len(DNS_CACHE)} hosts cached)"
+            )
+            return ip
+
+    # Resolve hostname
+    loop = asyncio.get_running_loop()
+    try:
+        addr_info_list = await loop.getaddrinfo(host, None, family=0)
+        resolved_ips = {
+            info[4][0] for info in addr_info_list
+        }  # Use a set for uniqueness
+    except OSError as e:
+        raise OSError(f"Failed to resolve host: {host}") from e
+
+    # Security Check and IP version separation
+    public_ipv4s = []
+    public_ipv6s = []
+    for ip_str in resolved_ips:
+        if not is_private_ip(ip_str):
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+                if ip_obj.version == 4:
+                    public_ipv4s.append(ip_str)
+                elif ip_obj.version == 6:
+                    public_ipv6s.append(ip_str)
+            except ValueError:
+                continue  # Ignore invalid IP strings
+
+    # Prioritization Logic
+    chosen_ip = None
+    if has_public_ipv6() and public_ipv6s:
+        logger.debug(f"Host has public IPv6. Prioritizing from: {public_ipv6s}")
+        chosen_ip = random.choice(public_ipv6s)
+    elif public_ipv4s:
+        logger.debug(
+            f"No public IPv6 available/resolved. Using IPv4 from: {public_ipv4s}"
+        )
+        chosen_ip = random.choice(public_ipv4s)
+    elif public_ipv6s:  # Fallback to IPv6 if it's all we have
+        logger.debug(f"Only IPv6 resolved. Using from: {public_ipv6s}")
+        chosen_ip = random.choice(public_ipv6s)
+    else:
+        raise PermissionError(
+            f"Blocked access to '{host}' as it resolved to only private/reserved IPs."
+        )
+
+    # Update cache
+    DNS_CACHE[host] = (chosen_ip, time.time())
+    logger.debug(
+        f"DNS cache miss for '{host}'. Chose {chosen_ip}. Caching. ({len(DNS_CACHE)} hosts cached)"
+    )
+    return chosen_ip
+
+
 # --- Core Request Handlers ---
 
 
@@ -67,8 +145,13 @@ async def process_https_tunnel(
     server_writer = None
 
     try:
+        # Resolve, validate, and cache the host's IP address.
+        validated_host_ip = await _resolve_and_validate_host(host)
+
         # Establish a standard TCP connection to the target server.
-        server_reader, server_writer = await asyncio.open_connection(host, port)
+        server_reader, server_writer = await asyncio.open_connection(
+            validated_host_ip, port
+        )
 
         # Signal the client that the tunnel is established.
         client_writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
@@ -81,6 +164,12 @@ async def process_https_tunnel(
 
         logger.info(f"[{ident['id']}][{ident['client']}]: {method} 200 {uri}")
 
+    except PermissionError as e:
+        logger.warning(
+            f"[{ident['id']}][{ident['client']}]: {method} 403 {uri} ({e})"
+        )
+        client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
+        await client_writer.drain()
     except Exception as e:
         logger.error(
             f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
@@ -105,8 +194,11 @@ async def _send_http_request(
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
 
+    # Resolve, validate, and cache the host's IP address.
+    validated_host_ip = await _resolve_and_validate_host(host)
+
     server_reader, server_writer = await asyncio.open_connection(
-        host, port, flags=TCP_NODELAY
+        validated_host_ip, port, flags=TCP_NODELAY
     )
 
     server_writer.write(request_line + b"\r\n" + headers_bytes + b"\r\n\r\n")
@@ -244,6 +336,12 @@ async def process_http_request(
             f"[{ident['id']}][{ident['client']}]: {method} {response_code} {uri}"
         )
 
+    except PermissionError as e:
+        logger.warning(
+            f"[{ident['id']}][{ident['client']}]: {method} 403 {uri} ({e})"
+        )
+        client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
+        await client_writer.drain()
     except Exception as e:
         logger.error(
             f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
