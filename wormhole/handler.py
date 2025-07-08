@@ -1,15 +1,15 @@
 from .logger import logger
-from .safeguards import has_public_ipv6, is_private_ip, is_ad_domain
+from .safeguards import has_public_ipv6, is_ad_domain, is_private_ip
 from .tools import get_content_length, get_host_and_port
-from socket import TCP_NODELAY
 import asyncio
 import ipaddress
 import random
 import time
 
 # --- DNS Cache for Performance ---
-DNS_CACHE: dict[str, tuple[str, float]] = {}
+DNS_CACHE: dict[str, tuple[list[str], float]] = {}
 DNS_CACHE_TTL: int = 300  # Cache DNS results for 5 minutes
+
 
 # --- Modernized Relay Stream Function ---
 
@@ -52,7 +52,6 @@ async def relay_stream(
     except Exception as e:
         logger.exception(
             f"[{ident['id']}][{ident['client']}]: Unexpected relay error: {e}",
-            exc_info=True,
         )
     finally:
         if not writer.is_closing():
@@ -61,12 +60,14 @@ async def relay_stream(
     return first_line
 
 
-async def _resolve_and_validate_host(host: str, allow_private: bool) -> str:
+async def _resolve_and_validate_host(
+    host: str, allow_private: bool
+) -> list[str]:
     """
-    Resolves a hostname to an IP, validates it against private ranges, and caches it.
+    Resolves a hostname to a list of IPs, validates them, and caches the list.
     Supports DNS load balancing and prioritizes IPv6 if available.
     Raises:
-        PermissionError: If all resolved IPs are private/reserved addresses.
+        PermissionError: If the host is an ad domain or resolves to only private IPs.
         OSError: If the host cannot be resolved.
     """
     # Ad-block check
@@ -75,62 +76,104 @@ async def _resolve_and_validate_host(host: str, allow_private: bool) -> str:
 
     # Check cache first
     if host in DNS_CACHE:
-        ip, timestamp = DNS_CACHE[host]
+        ip_list, timestamp = DNS_CACHE[host]
         if time.time() - timestamp < DNS_CACHE_TTL:
             logger.debug(
                 f"DNS cache hit for '{host}'. ({len(DNS_CACHE)} hosts cached)"
             )
-            return ip
+            return ip_list
 
     # Resolve hostname
     loop = asyncio.get_running_loop()
     try:
         addr_info_list = await loop.getaddrinfo(host, None, family=0)
-        resolved_ips = {
-            info[4][0] for info in addr_info_list
-        }  # Use a set for uniqueness
+        resolved_ips = {info[4][0] for info in addr_info_list}
     except OSError as e:
         raise OSError(f"Failed to resolve host: {host}") from e
 
     # Security Check and IP version separation
-    public_ipv4s = []
-    public_ipv6s = []
+    valid_ipv4s, valid_ipv6s = [], []
     for ip_str in resolved_ips:
         # Bypass the private IP check if the flag is set.
         if allow_private or not is_private_ip(ip_str):
             try:
                 ip_obj = ipaddress.ip_address(ip_str)
                 if ip_obj.version == 4:
-                    public_ipv4s.append(ip_str)
+                    valid_ipv4s.append(ip_str)
                 elif ip_obj.version == 6:
-                    public_ipv6s.append(ip_str)
+                    valid_ipv6s.append(ip_str)
             except ValueError:
-                continue  # Ignore invalid IP strings
+                continue
 
-    # Prioritization Logic
-    chosen_ip = None
-    if has_public_ipv6() and public_ipv6s:
-        logger.debug(f"Host has public IPv6. Prioritizing from: {public_ipv6s}")
-        chosen_ip = random.choice(public_ipv6s)
-    elif public_ipv4s:
+    # Prioritization and shuffling for load balancing
+    final_ip_list = []
+    if has_public_ipv6() and valid_ipv6s:
         logger.debug(
-            f"No public IPv6 available/resolved. Using IPv4 from: {public_ipv4s}"
+            f"Host has public IPv6. Prioritizing {len(valid_ipv6s)} IPv6 addresses."
         )
-        chosen_ip = random.choice(public_ipv4s)
-    elif public_ipv6s:  # Fallback to IPv6 if it's all we have
-        logger.debug(f"Only IPv6 resolved. Using from: {public_ipv6s}")
-        chosen_ip = random.choice(public_ipv6s)
-    else:
+        random.shuffle(valid_ipv6s)
+        final_ip_list.extend(valid_ipv6s)
+
+    if valid_ipv4s:
+        random.shuffle(valid_ipv4s)
+        final_ip_list.extend(valid_ipv4s)
+
+    # Fallback to IPv6 if it's all we have and wasn't prioritized
+    if not final_ip_list and valid_ipv6s:
+        random.shuffle(valid_ipv6s)
+        final_ip_list.extend(valid_ipv6s)
+
+    if not final_ip_list:
         raise PermissionError(
             f"Blocked access to '{host}' as it resolved to only private/reserved IPs."
         )
 
     # Update cache
-    DNS_CACHE[host] = (chosen_ip, time.time())
+    DNS_CACHE[host] = (final_ip_list, time.time())
     logger.debug(
-        f"DNS cache miss for '{host}'. Chose {chosen_ip}. Caching. ({len(DNS_CACHE)} hosts cached)"
+        f"DNS cache miss for '{host}'. Resolved to {final_ip_list}. Caching. ({len(DNS_CACHE)} hosts cached)"
     )
-    return chosen_ip
+    return final_ip_list
+
+
+async def _create_connection_with_retries(
+    ip_list: list[str], port: int, ident: dict[str, str]
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """
+    Tries to connect to a list of IPs with a fast timeout and retry mechanism.
+    """
+    max_attempts = 3
+    timeout = 5  # seconds
+    last_error = None
+
+    # Create a list of connection targets to try, ensuring we don't exceed max_attempts
+    targets_to_try = (ip_list * (max_attempts // len(ip_list) + 1))[
+        :max_attempts
+    ]
+
+    for i, ip in enumerate(targets_to_try):
+        attempt = i + 1
+        logger.debug(
+            f"Connection attempt {attempt}/{max_attempts} to {ip}:{port}"
+        )
+        try:
+            # Use a short timeout for each connection attempt
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port), timeout=timeout
+            )
+            logger.debug(
+                f"Successfully connected to {ip}:{port} on attempt {attempt}"
+            )
+            return reader, writer
+        except (OSError, asyncio.TimeoutError) as e:
+            last_error = e
+            logger.warning(
+                f"Connection to {ip}:{port} failed on attempt {attempt}: {e}"
+            )
+
+    raise OSError(
+        f"Failed to connect after {max_attempts} attempts. Last error: {last_error}"
+    )
 
 
 # --- Core Request Handlers ---
@@ -150,14 +193,12 @@ async def process_https_tunnel(
     server_writer = None
 
     try:
-        # Resolve, validate, and cache the host's IP address.
-        validated_host_ip = await _resolve_and_validate_host(
-            host, allow_private
-        )
+        # Resolve and validate the host to get a list of potential IPs.
+        ip_list = await _resolve_and_validate_host(host, allow_private)
 
-        # Establish a standard TCP connection to the target server.
-        server_reader, server_writer = await asyncio.open_connection(
-            validated_host_ip, port
+        # Attempt to connect to one of the IPs with retry logic.
+        server_reader, server_writer = await _create_connection_with_retries(
+            ip_list, port, ident
         )
 
         # Signal the client that the tunnel is established.
@@ -189,24 +230,22 @@ async def process_https_tunnel(
 
 
 async def _send_http_request(
-    host: str,
+    ip_list: list[str],
     port: int,
     method: str,
     path: str,
     version: str,
     headers: list[str],
     payload: bytes,
-    allow_private: bool,
+    ident: dict[str, str],
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """Helper function to connect and send an HTTP request."""
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
 
-    # Resolve, validate, and cache the host's IP address.
-    validated_host_ip = await _resolve_and_validate_host(host, allow_private)
-
-    server_reader, server_writer = await asyncio.open_connection(
-        validated_host_ip, port, flags=TCP_NODELAY
+    # Attempt to connect to one of the IPs with retry logic.
+    server_reader, server_writer = await _create_connection_with_retries(
+        ip_list, port, ident
     )
 
     server_writer.write(request_line + b"\r\n" + headers_bytes + b"\r\n\r\n")
@@ -260,6 +299,9 @@ async def process_http_request(
             await client_writer.drain()
             return
 
+        # Resolve and validate the host to get a list of potential IPs.
+        ip_list = await _resolve_and_validate_host(host, allow_private)
+
         # --- Attempt to upgrade to HTTP/1.1 if needed ---
         if version == "HTTP/1.0":
             logger.debug(
@@ -282,14 +324,14 @@ async def process_http_request(
             try:
                 # Attempt 1: Try with HTTP/1.1
                 server_reader, server_writer = await _send_http_request(
-                    host,
+                    ip_list,
                     port,
                     method,
                     path,
                     "HTTP/1.1",
                     headers_v1_1,
                     payload,
-                    allow_private,
+                    ident,
                 )
             except Exception as e:
                 logger.warning(
@@ -311,14 +353,14 @@ async def process_http_request(
                 original_headers.append("Connection: close")
 
                 server_reader, server_writer = await _send_http_request(
-                    host,
+                    ip_list,
                     port,
                     method,
                     path,
                     "HTTP/1.0",
                     original_headers,
                     payload,
-                    allow_private,
+                    ident,
                 )
         else:
             # Original request was already HTTP/1.1 or newer
@@ -335,14 +377,14 @@ async def process_http_request(
             final_headers.append("Connection: close")
 
             server_reader, server_writer = await _send_http_request(
-                host,
+                ip_list,
                 port,
                 method,
                 path,
                 version,
                 final_headers,
                 payload,
-                allow_private,
+                ident,
             )
 
         # Relay the server's response back to the client.
