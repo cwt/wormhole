@@ -43,7 +43,11 @@ async def main_async(args) -> None:
         loop.add_signal_handler(sig, lambda: shutdown_event.set())
 
     server = await start_wormhole_server(
-        args.host, args.port, args.authentication, args.verbose
+        args.host,
+        args.port,
+        args.authentication,
+        args.verbose,
+        args.allow_private,
     )
 
     logger.info("Server startup complete. Waiting for connections...")
@@ -81,6 +85,11 @@ def main() -> int:
         "--authentication",
         default=None,
         help="Path to authentication file (user:pass list)",
+    )
+    parser.add_argument(
+        "--allow-private",
+        action="store_true",
+        help="Allow proxying to private and reserved IP addresses (disabled by default)",
     )
     parser.add_argument(
         "-S",

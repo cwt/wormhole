@@ -43,6 +43,7 @@ performance = ["winloop", "uvloop"]
 packages = [{include = "wormhole"}]
 
 [tool.poetry.dependencies]
+loguru = "^0.7.2"
 # The python version is now specified in [project].requires-python
 # Required Windows-only packages
 pywin32 = { version = "*", markers = "sys_platform == 'win32'" }

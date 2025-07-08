@@ -50,7 +50,7 @@ async def relay_stream(
             f"[{ident['id']}][{ident['client']}]: Relay network error: {e}"
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             f"[{ident['id']}][{ident['client']}]: Unexpected relay error: {e}",
             exc_info=True,
         )
@@ -61,11 +61,10 @@ async def relay_stream(
     return first_line
 
 
-async def _resolve_and_validate_host(host: str) -> str:
+async def _resolve_and_validate_host(host: str, allow_private: bool) -> str:
     """
     Resolves a hostname to an IP, validates it against private ranges, and caches it.
     Supports DNS load balancing and prioritizes IPv6 if available.
-
     Raises:
         PermissionError: If all resolved IPs are private/reserved addresses.
         OSError: If the host cannot be resolved.
@@ -93,7 +92,8 @@ async def _resolve_and_validate_host(host: str) -> str:
     public_ipv4s = []
     public_ipv6s = []
     for ip_str in resolved_ips:
-        if not is_private_ip(ip_str):
+        # Bypass the private IP check if the flag is set.
+        if allow_private or not is_private_ip(ip_str):
             try:
                 ip_obj = ipaddress.ip_address(ip_str)
                 if ip_obj.version == 4:
@@ -138,6 +138,7 @@ async def process_https_tunnel(
     method: str,
     uri: str,
     ident: dict[str, str],
+    allow_private: bool,
 ) -> None:
     """Establishes an HTTPS tunnel and relays data between client and server."""
     host, port = get_host_and_port(uri)
@@ -146,7 +147,9 @@ async def process_https_tunnel(
 
     try:
         # Resolve, validate, and cache the host's IP address.
-        validated_host_ip = await _resolve_and_validate_host(host)
+        validated_host_ip = await _resolve_and_validate_host(
+            host, allow_private
+        )
 
         # Establish a standard TCP connection to the target server.
         server_reader, server_writer = await asyncio.open_connection(
@@ -171,7 +174,7 @@ async def process_https_tunnel(
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
     except Exception as e:
-        logger.error(
+        logger.exception(
             f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
         )
     finally:
@@ -189,13 +192,14 @@ async def _send_http_request(
     version: str,
     headers: list[str],
     payload: bytes,
+    allow_private: bool,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """Helper function to connect and send an HTTP request."""
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
 
     # Resolve, validate, and cache the host's IP address.
-    validated_host_ip = await _resolve_and_validate_host(host)
+    validated_host_ip = await _resolve_and_validate_host(host, allow_private)
 
     server_reader, server_writer = await asyncio.open_connection(
         validated_host_ip, port, flags=TCP_NODELAY
@@ -217,6 +221,7 @@ async def process_http_request(
     headers: list[str],
     payload: bytes,
     ident: dict[str, str],
+    allow_private: bool,
 ) -> None:
     """Processes a standard HTTP request by forwarding it to the target server."""
     server_reader = None
@@ -273,7 +278,14 @@ async def process_http_request(
             try:
                 # Attempt 1: Try with HTTP/1.1
                 server_reader, server_writer = await _send_http_request(
-                    host, port, method, path, "HTTP/1.1", headers_v1_1, payload
+                    host,
+                    port,
+                    method,
+                    path,
+                    "HTTP/1.1",
+                    headers_v1_1,
+                    payload,
+                    allow_private,
                 )
             except Exception as e:
                 logger.warning(
@@ -302,6 +314,7 @@ async def process_http_request(
                     "HTTP/1.0",
                     original_headers,
                     payload,
+                    allow_private,
                 )
         else:
             # Original request was already HTTP/1.1 or newer
@@ -318,7 +331,14 @@ async def process_http_request(
             final_headers.append("Connection: close")
 
             server_reader, server_writer = await _send_http_request(
-                host, port, method, path, version, final_headers, payload
+                host,
+                port,
+                method,
+                path,
+                version,
+                final_headers,
+                payload,
+                allow_private,
             )
 
         # Relay the server's response back to the client.
@@ -343,7 +363,7 @@ async def process_http_request(
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
     except Exception as e:
-        logger.error(
+        logger.exception(
             f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
         )
         if not client_writer.is_closing():

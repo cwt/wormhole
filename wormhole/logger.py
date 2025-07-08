@@ -1,78 +1,58 @@
-import logging  # noqa
+from loguru import logger
 import logging.handlers
 import os
-import socket
+import sys
 
-# --- Context Filter for Syslog ---
-
-
-class ContextFilter(logging.Filter):
-    """Injects the hostname into log records for syslog formatting."""
-
-    hostname: str = socket.gethostname()
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.hostname = self.hostname
-        return True
-
-
-# --- Module-level Logger (The Singleton) ---
-
-# In Python, modules are singletons. We create the logger instance here once.
-# It will be configured by `setup_logger` and then imported by other modules.
-logger = logging.getLogger("wormhole")
-
-
-# --- Configuration Function ---
+# In loguru, the logger is imported and ready to be configured.
+# We just need to ensure other modules import this configured instance.
 
 
 def setup_logger(
     syslog_host: str | None = None, syslog_port: int = 514, verbose: int = 0
 ) -> None:
     """
-    Configures the global logger instance. This should only be called once.
+    Configures the global loguru logger instance. This should only be called once.
     """
-    # Prevent re-configuration if handlers are already present.
-    if logger.handlers:
-        return
+    # Remove the default handler to have full control over sinks.
+    logger.remove()
 
     # Set logging level based on verbosity.
-    logger.setLevel(logging.INFO)
-    logging.getLogger("asyncio").setLevel(logging.CRITICAL)
-
-    if verbose >= 1:
-        logger.setLevel(logging.DEBUG)
     if verbose >= 2:
-        logging.getLogger("asyncio").setLevel(logging.DEBUG)
+        level = "DEBUG"
+    elif verbose >= 1:
+        level = "DEBUG"
+    else:
+        level = "INFO"
 
-    # --- Console Handler ---
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(name)s[%(process)d]: %(message)s",
-            datefmt="%b %d %H:%M:%S",
-        )
+    # --- Console Sink ---
+    # Loguru automatically adds contextual data. The format is simpler.
+    console_format = (
+        "<green>{time:MMM D HH:mm:ss}</green> "
+        "<cyan>{name}</cyan>[<cyan>{process}</cyan>]: "
+        "<level>{message}</level>"
     )
-    logger.addHandler(console_handler)
+    logger.add(sys.stderr, level=level, format=console_format)
 
-    # --- Syslog Handler ---
+    # --- Syslog Sink ---
     if syslog_host and syslog_host != "DISABLED":
-        # Handle local syslog socket vs. network host.
+        # Create a standard library syslog handler instance.
+        # Loguru can sink to handler objects directly.
         if syslog_host.startswith("/") and os.path.exists(syslog_host):
-            syslog_handler = logging.handlers.SysLogHandler(address=syslog_host)
-            formatter = logging.Formatter(
-                "%(asctime)s %(name)s[%(process)d]: %(message)s",
-                datefmt="%b %d %H:%M:%S",
-            )
+            handler = logging.handlers.SysLogHandler(address=syslog_host)
+            syslog_format = "{time:MMM D HH:mm:ss} {name}[{process}]: {message}"
         else:
-            logger.addFilter(ContextFilter())
-            syslog_handler = logging.handlers.SysLogHandler(
+            handler = logging.handlers.SysLogHandler(
                 address=(syslog_host, syslog_port)
             )
-            formatter = logging.Formatter(
-                "%(asctime)s %(hostname)s %(name)s[%(process)d]: %(message)s",
-                datefmt="%b %d %H:%M:%S",
-            )
+            # For network syslog, the hostname is typically added by the syslog server,
+            # but we can include it if needed.
+            syslog_format = "{time:MMM D HH:mm:ss} {extra[hostname]} {name}[{process}]: {message}"
+            # Add hostname to all log records.
+            logger.configure(extra={"hostname": os.uname().nodename})
 
-        syslog_handler.setFormatter(formatter)
-        logger.addHandler(syslog_handler)
+        logger.add(handler, level="INFO", format=syslog_format)
+
+    # Suppress overly verbose asyncio logger messages unless in high verbosity.
+    logging.getLogger("asyncio").setLevel(
+        logging.DEBUG if verbose >= 2 else logging.CRITICAL
+    )

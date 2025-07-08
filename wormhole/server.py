@@ -10,7 +10,6 @@ import sys
 # --- Constants ---
 MAX_RETRY: int = 3
 MAX_TASKS: int = 1024  # Default value, will be overridden below if possible.
-
 # Determine the maximum number of concurrent tasks based on the OS limit for open files.
 # We use 90% of the limit to leave a buffer for other system operations.
 try:
@@ -24,7 +23,6 @@ try:
         MAX_TASKS = int(0.9 * resource.getrlimit(resource.RLIMIT_NOFILE)[0])
 except (ImportError, ValueError):
     pass  # If we can't determine the limit, fall back to the default value.
-
 CURRENT_TASKS = 0
 
 # --- Main Connection Handler ---
@@ -35,6 +33,7 @@ async def handle_connection(
     client_writer: asyncio.StreamWriter,
     auth_file_path: str | None,
     verbose: int = 0,
+    allow_private: bool = False,
 ) -> None:
     """
     Manages a single client connection from start to finish.
@@ -86,16 +85,22 @@ async def handle_connection(
                 )
                 return
             ident = user_ident  # Update ident with authenticated user info.
-
         # --- Request Dispatching ---
         if method.upper() == "CONNECT":
             await process_https_tunnel(
-                client_reader, client_writer, method, uri, ident
+                client_reader, client_writer, method, uri, ident, allow_private
             )
         else:
             # The check above ensures `headers` is `list[str]` and `payload` is `bytes`.
             await process_http_request(
-                client_writer, method, uri, version, headers, payload, ident
+                client_writer,
+                method,
+                uri,
+                version,
+                headers,
+                payload,
+                ident,
+                allow_private,
             )
 
     except Exception as e:
@@ -115,14 +120,21 @@ async def handle_connection(
 
 
 async def start_wormhole_server(
-    host: str, port: int, auth_file_path: str | None, verbose: int = 0
+    host: str,
+    port: int,
+    auth_file_path: str | None,
+    verbose: int = 0,
+    allow_private: bool = False,
 ) -> asyncio.Server:
     """
     Initializes and starts the main proxy server.
     """
     # Use functools.partial to pass the auth_file_path and verbose flag to the connection handler.
     connection_handler = functools.partial(
-        handle_connection, auth_file_path=auth_file_path, verbose=verbose
+        handle_connection,
+        auth_file_path=auth_file_path,
+        verbose=verbose,
+        allow_private=allow_private,
     )
 
     try:
