@@ -1,9 +1,9 @@
+from .logger import logger
+from functools import lru_cache
+import aiosqlite
 import ipaddress
 import socket
 import sys
-from functools import lru_cache
-import aiosqlite
-from .logger import logger
 
 # A hardcoded default allowlist for essential analytics and CDN domains.
 DEFAULT_ALLOWLIST: set[str] = {

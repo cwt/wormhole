@@ -1,10 +1,10 @@
 from .logger import logger
+from .safeguards import DEFAULT_ALLOWLIST
 from pathlib import Path
 import aiohttp
 import aiosqlite
 import asyncio
 import re
-from .safeguards import DEFAULT_ALLOWLIST
 
 # A curated list of popular and well-maintained ad-block lists
 BLOCKLIST_URLS = [
