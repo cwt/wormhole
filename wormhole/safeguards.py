@@ -7,13 +7,17 @@ import sys
 
 # A hardcoded default allowlist for essential analytics and CDN domains.
 DEFAULT_ALLOWLIST: set[str] = {
-    "analytics.google.com",
-    "fonts.googleapis.com",
-    "google-analytics.com",
-    "googletagmanager.com",
-    "static.cloudflareinsights.com",
-    "vitals.vercel-insights.com",
-    "sentry.io",
+    "cdn.jsdelivr.net",  # jsDelivr CDN for npm/GitHub packages
+    "fonts.googleapis.com",  # Google Fonts
+    "safebrowsing.googleapis.com",  # Google Safe Browsing for security
+    "www.googleapis.com",  # Google APIs (e.g., Maps, reCAPTCHA)
+    "static.cloudflareinsights.com",  # Cloudflare Web Analytics
+    "vitals.vercel-insights.com",  # Vercel Web Vitals
+    "sentry.io",  # Sentry for error tracking
+    "esm.run",  # jsDelivr for JavaScript modules
+    "data.jsdelivr.com",  # jsDelivr API
+    "cdnjs.com",  # Cloudflare CDNJS
+    "unpkg.com",  # Unpkg CDN
 }
 
 # The runtime sets are initialized. The allowlist starts with the defaults.
