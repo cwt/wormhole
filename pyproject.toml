@@ -43,6 +43,8 @@ performance = ["winloop", "uvloop"]
 packages = [{include = "wormhole"}]
 
 [tool.poetry.dependencies]
+aiohttp = "^3.12.13"
+aiosqlite = "^0.17.0"
 loguru = "^0.7.2"
 # The python version is now specified in [project].requires-python
 # Required Windows-only packages

@@ -1,5 +1,5 @@
 from .logger import logger
-from .safeguards import has_public_ipv6, is_private_ip
+from .safeguards import has_public_ipv6, is_private_ip, is_ad_domain
 from .tools import get_content_length, get_host_and_port
 from socket import TCP_NODELAY
 import asyncio
@@ -69,6 +69,10 @@ async def _resolve_and_validate_host(host: str, allow_private: bool) -> str:
         PermissionError: If all resolved IPs are private/reserved addresses.
         OSError: If the host cannot be resolved.
     """
+    # Ad-block check
+    if is_ad_domain(host):
+        raise PermissionError(f"Blocked ad domain: {host}")
+
     # Check cache first
     if host in DNS_CACHE:
         ip, timestamp = DNS_CACHE[host]

@@ -1,4 +1,7 @@
+syntax: glob
+
 build
 dist
 .egg-info
 .mypy_cache
+*.sqlite3

@@ -7,7 +7,9 @@ if sys.version_info < (3, 11):
     print("Error: Wormhole requires Python 3.11 or newer.", file=sys.stderr)
     sys.exit(1)
 
+from .ad_blocker import update_database
 from .logger import logger, setup_logger
+from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
 from .version import VERSION
 from argparse import ArgumentParser
@@ -28,12 +30,24 @@ except ImportError:
 
 async def main_async(args) -> None:
     """The main asynchronous function to run the server."""
-    setup_logger(args.syslog_host, args.syslog_port, args.verbose)
-
     if uvloop:
         logger.info(f"Using high-performance event loop: {uvloop.__name__}")
     else:
         logger.info("Using standard asyncio event loop.")
+
+    if args.allowlist:
+        num_allowed = load_allowlist(args.allowlist)
+        if num_allowed > 0:
+            logger.info(
+                f"Loaded custom allowlist. Total allowlist size: {num_allowed} domains."
+            )
+
+    if args.ad_block_db:
+        num_blocked = await load_ad_block_db(args.ad_block_db)
+        if num_blocked > 0:
+            logger.info(
+                f"Ad-blocker enabled with {num_blocked} domains from database."
+            )
 
     shutdown_event = asyncio.Event()
 
@@ -117,8 +131,27 @@ def main() -> int:
         default=0,
         help="Increase verbosity (-v, -vv)",
     )
+    # Ad-block arguments
+    ad_block_group = parser.add_argument_group("Ad-Blocker Options")
+    ad_block_group.add_argument(
+        "--ad-block-db",
+        default=None,
+        help="Path to the SQLite database file containing domains to block.",
+    )
+    ad_block_group.add_argument(
+        "--update-ad-block-db",
+        metavar="DB_PATH",
+        default=None,
+        help="Fetch public ad-block lists and compile them into a database file, then exit.",
+    )
+    ad_block_group.add_argument(
+        "--allowlist",
+        default=None,
+        help="Path to a file of domains to extend the default allowlist.",
+    )
     args = parser.parse_args()
 
+    # Print license information and exit.
     if args.license:
         print(parser.description)
         try:
@@ -130,14 +163,30 @@ def main() -> int:
             return 1
         return 0
 
+    # Setup the uvloop before any other operations thay migh use the event loop.
+    if uvloop:
+        uvloop.install()
+
+    # Setup logging before any other operations.
+    setup_logger(args.syslog_host, args.syslog_port, args.verbose)
+
+    if args.update_ad_block_db:
+        # For this standalone utility, configure a simple logger to show progress.
+        logger.info(f"Updating ad-block database at: {args.update_ad_block_db}")
+        try:
+            asyncio.run(
+                update_database(args.update_ad_block_db, args.allowlist)
+            )
+        except Exception as e:
+            logger.error(f"\nAn error occurred during update: {e}")
+            return 1
+        return 0
+
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535.")
 
     if args.authentication and not Path(args.authentication).is_file():
         parser.error(f"Authentication file not found: {args.authentication}")
-
-    if uvloop:
-        uvloop.install()
 
     try:
         asyncio.run(main_async(args))

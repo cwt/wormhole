@@ -1,0 +1,18 @@
+#
+# Allowlist for Wormhole Proxy
+#
+# Domains in this file will NOT be blocked, even if they appear in ad-block lists.
+# - Lines starting with # are comments.
+# - Add one domain per line.
+# - Subdomains of an allowed domain will also be allowed.
+#   (e.g., adding 'google-analytics.com' will also allow 'www.google-analytics.com')
+#
+
+# Common Analytics & Metrics
+google-analytics.com
+googletagmanager.com
+static.cloudflareinsights.com
+vitals.vercel-insights.com
+
+# Common CDNs / Content
+sentry.io
