@@ -8,6 +8,7 @@ if sys.version_info < (3, 11):
     sys.exit(1)
 
 from .ad_blocker import update_database
+from .auth_manager import add_user, modify_user, delete_user
 from .logger import logger, setup_logger
 from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
@@ -59,7 +60,7 @@ async def main_async(args) -> None:
     server = await start_wormhole_server(
         args.host,
         args.port,
-        args.authentication,
+        args.auth,
         args.verbose,
         args.allow_private,
     )
@@ -95,12 +96,6 @@ def main() -> int:
         help="Port to listen on [default: %(default)d]",
     )
     parser.add_argument(
-        "-a",
-        "--authentication",
-        default=None,
-        help="Path to authentication file (user:pass list)",
-    )
-    parser.add_argument(
         "--allow-private",
         action="store_true",
         help="Allow proxying to private and reserved IP addresses (disabled by default)",
@@ -130,6 +125,32 @@ def main() -> int:
         action="count",
         default=0,
         help="Increase verbosity (-v, -vv)",
+    )
+    # Authentication arguments
+    auth_group = parser.add_argument_group("Authentication Options")
+    auth_group.add_argument(
+        "--auth",
+        metavar="AUTH_FILE",
+        default=None,
+        help="Enable Digest authentication using the specified file.",
+    )
+    auth_group.add_argument(
+        "--auth-add",
+        nargs=2,
+        metavar=("<AUTH_FILE>", "<USERNAME>"),
+        help="Add a user to the authentication file and exit.",
+    )
+    auth_group.add_argument(
+        "--auth-mod",
+        nargs=2,
+        metavar=("<AUTH_FILE>", "<USERNAME>"),
+        help="Modify a user's password in the authentication file and exit.",
+    )
+    auth_group.add_argument(
+        "--auth-del",
+        nargs=2,
+        metavar=("<AUTH_FILE>", "<USERNAME>"),
+        help="Delete a user from the authentication file and exit.",
     )
     # Ad-block arguments
     ad_block_group = parser.add_argument_group("Ad-Blocker Options")
@@ -163,6 +184,14 @@ def main() -> int:
             return 1
         return 0
 
+    # Handle authentication management commands.
+    if args.auth_add:
+        return add_user(args.auth_add[0], args.auth_add[1])
+    if args.auth_mod:
+        return modify_user(args.auth_mod[0], args.auth_mod[1])
+    if args.auth_del:
+        return delete_user(args.auth_del[0], args.auth_del[1])
+
     # Setup the uvloop before any other operations thay migh use the event loop.
     if uvloop:
         uvloop.install()
@@ -185,8 +214,8 @@ def main() -> int:
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535.")
 
-    if args.authentication and not Path(args.authentication).is_file():
-        parser.error(f"Authentication file not found: {args.authentication}")
+    if args.auth and not Path(args.auth).is_file():
+        parser.error(f"Authentication file not found: {args.auth}")
 
     try:
         asyncio.run(main_async(args))

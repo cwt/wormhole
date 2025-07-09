@@ -75,9 +75,14 @@ async def handle_connection(
 
         # --- Authentication Check ---
         if auth_file_path:
-            # The check above ensures `headers` is `list[str]`, not `None`.
+            # Pass method and uri for Digest authentication calculation
             user_ident = await verify_credentials(
-                client_reader, client_writer, headers, auth_file_path
+                client_reader,
+                client_writer,
+                method,
+                uri,
+                headers,
+                auth_file_path,
             )
             if user_ident is None:
                 logger.info(

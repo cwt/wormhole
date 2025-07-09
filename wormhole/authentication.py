@@ -1,8 +1,16 @@
-from base64 import b64decode
+from pathlib import Path
 import asyncio
+import hashlib
+import re
+import secrets
 
-# A simple in-memory cache for the authentication list to avoid file I/O on every request.
-_auth_list_cache: list[str] | None = None
+# This must match the REALM in auth_manager.py
+REALM = "Wormhole Proxy"
+HASH_ALGORITHM = hashlib.sha256
+
+# Caches for performance
+_auth_file_cache: dict = {}
+_auth_file_mtime: float = 0.0
 
 
 def get_ident(
@@ -13,82 +21,119 @@ def get_ident(
     """Generates a unique identifier dictionary for a client connection."""
     peername = writer.get_extra_info("peername")
     client_ip = peername[0] if peername else "unknown"
-
     client_id = f"{user}@{client_ip}" if user else client_ip
-
     return {"id": hex(id(reader))[-6:], "client": client_id}
 
 
-def _load_auth_file(auth_file_path: str) -> list[str]:
-    """Loads and caches the list of 'user:password' strings from a file."""
-    global _auth_list_cache
-    if _auth_list_cache is None:
-        try:
-            with open(auth_file_path, "r", encoding="utf-8") as f:
-                _auth_list_cache = [
-                    line.strip()
-                    for line in f
-                    if line.strip() and not line.startswith("#")
-                ]
-        except FileNotFoundError:
-            # If the file doesn't exist, treat it as an empty auth list.
-            _auth_list_cache = []
-    return _auth_list_cache
+def _load_auth_file(path: Path) -> dict | None:
+    """Loads and caches the auth file if it has been modified."""
+    global _auth_file_cache, _auth_file_mtime
+    try:
+        current_mtime = path.stat().st_mtime
+        if current_mtime > _auth_file_mtime:
+            users = {}
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        user, realm, hash_val = line.strip().split(":", 2)
+                        users[user] = {"realm": realm, "hash": hash_val}
+                    except ValueError:
+                        continue  # Ignore malformed lines
+            _auth_file_cache = users
+            _auth_file_mtime = current_mtime
+    except FileNotFoundError:
+        return None
+    return _auth_file_cache
+
+
+def _parse_digest_header(header_value: str) -> dict[str, str]:
+    """Parses the Digest authentication header into a dictionary."""
+    # This regex handles quoted and unquoted values
+    parts = re.findall(r'(\w+)=(?:"([^"]*)"|([^\s,]*))', header_value)
+    # The regex produces tuples like ('key', 'quoted_val', ''), so we merge
+    return {key: val1 or val2 for key, val1, val2 in parts}
 
 
 async def send_auth_required_response(writer: asyncio.StreamWriter) -> None:
-    """Sends a 407 Proxy Authentication Required response to the client."""
-    response = (
+    """Sends a 407 Proxy Authentication Required with a new SHA-256 Digest challenge."""
+    nonce = secrets.token_hex(16)
+    opaque = secrets.token_hex(16)
+    # qop="auth" means quality of protection is authentication.
+    challenge = (
+        f'Digest realm="{REALM}", '
+        f'qop="auth", '
+        f"algorithm=SHA-256, "
+        f'nonce="{nonce}", '
+        f'opaque="{opaque}"'
+    )
+    response_header = (
         b"HTTP/1.1 407 Proxy Authentication Required\r\n"
-        b'Proxy-Authenticate: Basic realm="Wormhole Proxy"\r\n'
+        b"Proxy-Authenticate: %s\r\n"
         b"Connection: close\r\n"
         b"\r\n"
-    )
-    writer.write(response)
+    ) % challenge.encode("ascii")
+    writer.write(response_header)
     await writer.drain()
 
 
 async def verify_credentials(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
+    method: str,  # HTTP Method (e.g., 'CONNECT') is needed for HA2 calculation
+    uri: str,  # The original URI from the request line
     headers: list[str],
     auth_file_path: str,
 ) -> dict[str, str] | None:
-    """
-    Verifies the client's proxy credentials.
-
-    Args:
-        reader: The client's stream reader.
-        writer: The client's stream writer.
-        headers: The list of request headers.
-        auth_file_path: The path to the authentication file.
-
-    Returns:
-        A new identifier dictionary including the username if authentication
-        is successful, otherwise None.
-    """
-    auth_header = next(
+    """Verifies credentials using manual Digest SHA-256 validation."""
+    auth_header_full = next(
         (h for h in headers if h.lower().startswith("proxy-authorization:")),
         None,
     )
 
-    if auth_header:
-        try:
-            # Extract the Base64 encoded credentials.
-            encoded_credentials = auth_header.split(" ", 2)[-1]
-            # Decode and split into user:password.
-            decoded_credentials = b64decode(encoded_credentials).decode("ascii")
+    # 1. Check if an auth file exists; if not, deny all
+    users = _load_auth_file(Path(auth_file_path))
+    if users is None:
+        await send_auth_required_response(writer)
+        return None
 
-            # Check if the credentials are in the valid list.
-            if decoded_credentials in _load_auth_file(auth_file_path):
-                username = decoded_credentials.split(":", 1)[0]
-                return get_ident(reader, writer, user=username)
+    # 2. Check if the browser sent an Authorization header
+    if not auth_header_full:
+        await send_auth_required_response(writer)
+        return None
 
-        except (IndexError, ValueError, TypeError):
-            # This can happen with malformed auth headers.
-            # We will treat it as a failed authentication attempt.
-            pass
+    try:
+        auth_header_val = auth_header_full.split(" ", 1)[1]
+        params = _parse_digest_header(auth_header_val)
+        username = params["username"]
 
-    # If authentication fails or is not provided, deny access.
+        # 3. Look up the user and their stored HA1 hash
+        user_data = users.get(username)
+        if not user_data:
+            await send_auth_required_response(writer)
+            return None
+        ha1 = user_data["hash"]
+
+        # 4. Calculate HA2 on the server using the URI *from the auth header*
+        # --- THIS IS THE FIX ---
+        ha2_data = f"{method}:{params['uri']}".encode("utf-8")
+        ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
+
+        # 5. Calculate the expected response hash
+        response_data = (
+            f'{ha1}:{params["nonce"]}:{params["nc"]}:{params["cnonce"]}:'
+            f'{params["qop"]}:{ha2}'
+        ).encode("utf-8")
+        valid_response = HASH_ALGORITHM(response_data).hexdigest()
+
+        # 6. Compare the client's response with our calculated one
+        if secrets.compare_digest(valid_response, params["response"]):
+            # Success!
+            return get_ident(reader, writer, user=username)
+
+    except (KeyError, IndexError):
+        # This catches malformed headers or missing parameters
+        pass
+
+    # If anything fails, issue a new challenge and deny the request
     await send_auth_required_response(writer)
     return None

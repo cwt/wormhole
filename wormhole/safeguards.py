@@ -5,7 +5,7 @@ import ipaddress
 import socket
 import sys
 
-# A hardcoded default allowlist for essential analytics and CDN domains.
+# A hardcoded default allowlist for most known safe domains.
 DEFAULT_ALLOWLIST: set[str] = {
     "s3.amazonaws.com",  # Amazon S3 for static assets"
     "fonts.googleapis.com",  # Google Fonts
@@ -20,7 +20,8 @@ DEFAULT_ALLOWLIST: set[str] = {
     "data.jsdelivr.com",  # jsDelivr API
     "esm.run",  # jsDelivr for JavaScript modules
     "unpkg.com",  # Unpkg CDN
-    "sentry.io",  # Sentry for error tracking
+    "twitter.com",  # Twitter for social media integration
+    "x.com",  # X (formerly Twitter) for social media integration"
 }
 
 # The runtime sets are initialized. The allowlist starts with the defaults.
