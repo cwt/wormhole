@@ -2,7 +2,9 @@ import re
 
 REGEX_HOST = re.compile(r"(.+?):([0-9]{1,5})")
 
-REGEX_CONTENT_LENGTH = re.compile(r"\r\nContent-Length: ([0-9]+)\r\n", re.IGNORECASE)
+REGEX_CONTENT_LENGTH = re.compile(
+    r"\r\nContent-Length: ([0-9]+)\r\n", re.IGNORECASE
+)
 
 
 def get_host_and_port(
