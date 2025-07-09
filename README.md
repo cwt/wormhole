@@ -1,5 +1,8 @@
 # Wormhole
 
+[![PyPI Version](https://img.shields.io/pypi/v/wormhole-proxy.svg)](https://pypi.org/project/wormhole-proxy/)
+[![Quay.io Build Status](https://quay.io/repository/cwt/wormhole/status "Quay.io Build Status")](https://quay.io/repository/cwt/wormhole)
+
 **Wormhole** is a forward proxy without caching. You may use it for:
 
   - Modifying requests to look like they are originated from the IP
@@ -25,10 +28,11 @@
 ## Dependency
 
   - Python \>= 3.11
-  - `aiohttp`
-  - `aiosqlite`
-  - `loguru`
-  - [uvloop](https://github.com/MagicStack/uvloop) (optional)
+  - aiohttp
+  - aiosqlite
+  - loguru
+  - pywin32 (required for Windows)
+  - [uvloop](https://github.com/MagicStack/uvloop) (optional for Linux and macOS)
   - [winloop](https://github.com/Vizonex/Winloop) (optional for Windows)
 
 -----
