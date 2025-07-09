@@ -16,6 +16,7 @@
 
 ## Features
 
+  - **Secure Digest Authentication:** Wormhole supports HTTP Digest Authentication with the modern **SHA-256** algorithm. Passwords are never stored in plain text, providing a significant security improvement over Basic Authentication.
   - **Ad-blocking:** Wormhole can block domains based on a comprehensive list of ad-serving and tracking domains. You can create your own ad-block database or use the provided script to download and compile one from popular sources.
   - **Allowlist:** You can specify a list of domains that should never be blocked, ensuring that important services are always accessible.
   - **HTTP/1.1 Upgrade:** Automatically attempts to upgrade HTTP/1.0 requests to HTTP/1.1 to leverage modern web features and improve performance.
@@ -94,6 +95,34 @@ $ pip install https://hg.sr.ht/~cwt/wormhole/archive/tip.tar.gz
     port: 8800
     ```
 
+### Authentication Setup
+
+Wormhole includes built-in tools to securely manage users. These commands will prompt you to enter and confirm passwords interactively.
+
+  * **To create an authentication file and add a new user:**
+
+    ```shell
+    $ wormhole --auth-add wormhole.passwd <username>
+    ```
+
+  * **To change an existing user's password:**
+
+    ```shell
+    $ wormhole --auth-mod wormhole.passwd <username>
+    ```
+
+  * **To delete a user:**
+
+    ```shell
+    $ wormhole --auth-del wormhole.passwd <username>
+    ```
+
+  * **To run the proxy with authentication enabled:**
+
+    ```shell
+    $ wormhole --auth wormhole.passwd
+    ```
+
 ### Ad-Blocker Usage
 
 1.  **Update the ad-block database:**
@@ -119,16 +148,17 @@ $ wormhole --help
 The output will be similar to this:
 
 ```
-usage: wormhole [-h] [-H HOST] [-p PORT] [-a AUTHENTICATION] [--allow-private] [-S SYSLOG_HOST] [-P SYSLOG_PORT] [-l] [-v] [--ad-block-db AD_BLOCK_DB] [--update-ad-block-db DB_PATH] [--allowlist ALLOWLIST]
+usage: wormhole [-h] [-H HOST] [-p PORT] [--allow-private] [-S SYSLOG_HOST] [-P SYSLOG_PORT] [-l] [-v]
+                [--auth AUTH_FILE] [--auth-add <AUTH_FILE> <USERNAME>] [--auth-mod <AUTH_FILE> <USERNAME>]
+                [--auth-del <AUTH_FILE> <USERNAME>] [--ad-block-db AD_BLOCK_DB] [--update-ad-block-db DB_PATH]
+                [--allowlist ALLOWLIST]
 
-Wormhole (3.1.0): Asynchronous I/O HTTP/S Proxy
+Wormhole (3.1.3): Asynchronous I/O HTTP/S Proxy
 
 options:
   -h, --help            show this help message and exit
   -H HOST, --host HOST  Host address to bind [default: 0.0.0.0]
   -p PORT, --port PORT  Port to listen on [default: 8800]
-  -a AUTHENTICATION, --authentication AUTHENTICATION
-                        Path to authentication file (user:pass list)
   --allow-private       Allow proxying to private and reserved IP addresses (disabled by default)
   -S SYSLOG_HOST, --syslog-host SYSLOG_HOST
                         Syslog host or path (e.g., /dev/log)
@@ -136,6 +166,15 @@ options:
                         Syslog port [default: 514]
   -l, --license         Print license information and exit
   -v, --verbose         Increase verbosity (-v, -vv)
+
+Authentication Options:
+  --auth AUTH_FILE      Enable Digest authentication using the specified file.
+  --auth-add <AUTH_FILE> <USERNAME>
+                        Add a user to the authentication file and exit.
+  --auth-mod <AUTH_FILE> <USERNAME>
+                        Modify a user's password in the authentication file and exit.
+  --auth-del <AUTH_FILE> <USERNAME>
+                        Delete a user from the authentication file and exit.
 
 Ad-Blocker Options:
   --ad-block-db AD_BLOCK_DB
@@ -203,11 +242,18 @@ podman run --rm -it -p 8800:8800 \
 
 **Step A: Create an authentication file**
 
-Create a file (e.g., `/path.to/config/wormhole.passwd`) on your host machine with username:password entries, one per line.
+First, you need to have a local config path to save the generated authentication file.
 
-```text
-user1:password1
-user2:anotherpassword
+```shell
+mkdir -p /path/to/config  # change this to your desired path
+```
+
+Run a temporary container to create the authentication file. You will be prompted to enter a password for the new user.
+
+```shell
+# Replace <username> with your desired username
+podman run --rm -it -v /path/to/config:/config quay.io/cwt/wormhole:<tag> \
+  wormhole --auth-add /config/wormhole.passwd <username>
 ```
 
 **Step B: Run the container with the auth file mounted**
@@ -236,5 +282,3 @@ MIT License (included in the source distribution)
 
   - This project is forked and converted to Mercurial from
     [WARP](https://github.com/devunt/warp) on GitHub.
-  - Authentication file contains `username` and `password` in **plain
-    text**, keep it secret\!
