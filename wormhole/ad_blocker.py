@@ -26,7 +26,7 @@ DOMAIN_REGEX = re.compile(
 async def _fetch_list(session: aiohttp.ClientSession, url: str) -> str:
     """Fetches the content of a single blocklist URL with a retry mechanism."""
     max_retries = 3
-    timeout = 15  # seconds
+    timeout = aiohttp.ClientTimeout(total=15)  # seconds
     for attempt in range(max_retries):
         try:
             logger.info(
