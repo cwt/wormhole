@@ -144,33 +144,81 @@ Ad-Blocker Options:
 
 -----
 
-## Docker Image Usage
+## **Docker Image Usage**
 
-### Run without authentication
+Official images are available at [quay.io/cwt/wormhole](https://quay.io/repository/cwt/wormhole).
 
-```shell
-$ docker pull bashell/wormhole
-$ docker run -d -p 8800:8800 bashell/wormhole
-```
+### **1. Pull the image**
 
-### Run with authentication
-
-  - Create an empty directory on your docker host
-  - Create an authentication file that contains username and password in
-    this format `username:password`
-  - Link that directory to the container via option `-v` and also run
-    wormhole container with option `-a /path/to/authentication_file`
-
-Example:
+Pull the desired version tag from Quay.io.
 
 ```shell
-$ docker pull bashell/wormhole
-$ mkdir -p /path/to/dir
-$ echo "user1:password1" > /path/to/dir/wormhole.passwd
-$ docker run -d -v /path/to/dir:/opt/wormhole \
-  -p 8800:8800 bashell/wormhole \
-  -a /opt/wormhole/wormhole.passwd
+# Replace <tag> with a specific version, e.g., v3.1.2  
+podman pull quay.io/cwt/wormhole:<tag>
 ```
+
+### **2. Run without special configuration**
+
+To run Wormhole on the default port 8800 without authentication or ad-blocking:
+
+```shell
+podman run --rm -it -p 8800:8800 quay.io/cwt/wormhole:<tag>
+```
+
+### **3. Running with Ad-Blocker**
+
+**Step A: Create the ad-block database on your host**
+
+First, you need to have a local config path to save the generated database file.
+
+```shell
+mkdir -p /path/to/config  # change this to your desired path
+```
+
+Then, run the following command to create the ad-block database file:
+
+```shell
+podman run --rm -it -v /path/to/config:/config quay.io/cwt/wormhole:<tag> wormhole --update-ad-block-db /config/ads.sqlite3
+```
+
+This will create a file named ads.sqlite3 in `/path/to/config/` on your host.
+
+**Step B: Run the container with the database mounted**
+
+Now, run the container, mounting the ads.sqlite3 file into the container's `/config` directory.
+
+```shell
+# Using :ro mounts the database as read-only for better security.
+podman run --rm -it -p 8800:8800 \
+  -v /path/to/config/ads.sqlite3:/config/ads.sqlite3:ro \
+  quay.io/cwt/wormhole:<tag> \
+  wormhole --ad-block-db /config/ads.sqlite3
+```
+
+### **4. Running with Authentication**
+
+**Step A: Create an authentication file**
+
+Create a file (e.g., `/path.to/config/wormhole.passwd`) on your host machine with username:password entries, one per line.
+
+```text
+user1:password1
+user2:anotherpassword
+```
+
+**Step B: Run the container with the auth file mounted**
+
+Mount the authentication file into the `/config` directory.
+
+```shell
+# Replace /path/to/config with the absolute path to your wormhole.passwd file.
+podman run --rm -it -p 8800:8800 \
+  -v /path/to/config/wormhole.passwd:/config/wormhole.passwd:ro \
+  quay.io/cwt/wormhole:<tag> \
+  wormhole -a /config/wormhole.passwd
+```
+
+*(Note: You can use docker in place of podman for all examples.)*
 
 -----
 
