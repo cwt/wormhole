@@ -134,11 +134,11 @@ class Resolver:
             return [ip]
 
         # 2. Query DNS using aiodns for IPv4 and IPv6 addresses concurrently
-        tasks = [
+        results = await asyncio.gather(
             self.resolver.query(hostname, "A"),
             self.resolver.query(hostname, "AAAA"),
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            return_exceptions=True,
+        )
 
         resolved_ips: set[str] = set()
         for res in results:
