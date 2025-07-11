@@ -49,8 +49,16 @@ async def main_async(args) -> None:
             )
         )
 
+    # Initialize the resolver with the configured verbosity.
+    resolver.initialize(verbose=args.verbose)
+
     if args.allowlist:
-        num_allowed = load_allowlist(args.allowlist, args.host)
+        num_allowed = load_allowlist(
+            args.allowlist,
+            args.host,
+            ident={"id": "000000", "client": args.host},
+            verbose=args.verbose,
+        )
         if num_allowed > 0:
             logger.info(
                 flm(
@@ -61,7 +69,12 @@ async def main_async(args) -> None:
             )
 
     if args.ad_block_db:
-        num_blocked = await load_ad_block_db(args.ad_block_db, args.host)
+        num_blocked = await load_ad_block_db(
+            args.ad_block_db,
+            args.host,
+            ident={"id": "000000", "client": args.host},
+            verbose=args.verbose,
+        )
         if num_blocked > 0:
             logger.info(
                 flm(
@@ -246,7 +259,6 @@ def main() -> int:
         args.verbose,
         async_mode=is_server_mode,
     )
-    resolver.configure(verbose=args.verbose)
 
     if args.update_ad_block_db:
         # For this standalone utility, configure a simple logger to show progress.

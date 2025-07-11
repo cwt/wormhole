@@ -32,12 +32,12 @@ class Resolver:
             self.resolver: aiodns.DNSResolver | None = None
             self.hosts_cache: dict[str, str] = {}
             self.verbose: int = 0  # Verbosity level, configured separately
-            self._load_hosts_file()
             Resolver._instance = self
 
-    def configure(self, verbose: int) -> None:
-        """Sets the verbosity level for logging."""
+    def initialize(self, verbose: int) -> None:
+        """Initializes the resolver with a verbosity level and loads the hosts file."""
         self.verbose = verbose
+        self._load_hosts_file()
 
     @staticmethod
     def get_instance() -> "Resolver":
@@ -64,7 +64,7 @@ class Resolver:
     def _load_hosts_file(self) -> None:
         """Parses the system's hosts file and populates the cache."""
         hosts_path = self._get_hosts_path()
-        ident = {"id": "resolver", "client": "internal"}
+        ident = {"id": "000000", "client": "0.0.0.0"}
 
         if not hosts_path.exists():
             logger.warning(
@@ -144,7 +144,10 @@ class Resolver:
         for res in results:
             if isinstance(res, list):
                 for record in res:
-                    resolved_ips.add(record.host)
+                    if isinstance(record.host, bytes):
+                        resolved_ips.add(record.host.decode())
+                    else:
+                        resolved_ips.add(record.host)
             elif isinstance(res, aiodns.error.DNSError):
                 # Ignore common "not found" errors. Log other DNS errors for debugging.
                 if res.args[0] not in (

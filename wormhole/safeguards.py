@@ -1,4 +1,4 @@
-from .logger import logger
+from .logger import logger, format_log_message as flm
 from functools import lru_cache
 import aiosqlite
 import ipaddress
@@ -84,7 +84,9 @@ def is_private_ip(ip_str: str) -> bool:
         return True
 
 
-async def load_ad_block_db(path: str, host: str) -> int:
+async def load_ad_block_db(
+    path: str, host: str, ident: dict[str, str], verbose: int = 0
+) -> int:
     """
     Loads a list of domains to block from a SQLite database into a global set
     for fast in-memory access.
@@ -105,7 +107,11 @@ async def load_ad_block_db(path: str, host: str) -> int:
                     AD_BLOCK_SET.add(row[0])
     except Exception as e:
         logger.error(
-            f"[000000][{host}]: Could not load ad-block database from '{path}': {e}",
+            flm(
+                f"Could not load ad-block database from '{path}': {e}",
+                ident=ident,
+                verbose=verbose,
+            )
         )
 
     if AD_BLOCK_SET:
@@ -114,13 +120,19 @@ async def load_ad_block_db(path: str, host: str) -> int:
         content_size = sum(sys.getsizeof(s) for s in AD_BLOCK_SET)
         total_size_mb = (set_size + content_size) / (1024 * 1024)
         logger.debug(
-            f"[000000][{host}]: Ad-block set memory usage: ~{total_size_mb:.2f} MB for {len(AD_BLOCK_SET)} domains"
+            flm(
+                f"Ad-block set memory usage: ~{total_size_mb:.2f} MB for {len(AD_BLOCK_SET)} domains",
+                ident=ident,
+                verbose=verbose,
+            )
         )
 
     return len(AD_BLOCK_SET)
 
 
-def load_allowlist(path: str, host: str) -> int:
+def load_allowlist(
+    path: str, host: str, ident: dict[str, str], verbose: int = 0
+) -> int:
     """
     Loads domains from a user-provided file and adds them to the global allowlist set.
     """
@@ -130,7 +142,13 @@ def load_allowlist(path: str, host: str) -> int:
                 if line.strip() and not line.startswith("#"):
                     ALLOW_LIST_SET.add(line.strip().lower())
     except FileNotFoundError:
-        logger.error(f"[000000][{host}]: Allowlist file not found at '{path}'")
+        logger.error(
+            flm(
+                f"Allowlist file not found at '{path}'",
+                ident=ident,
+                verbose=verbose,
+            )
+        )
     return len(ALLOW_LIST_SET)
 
 
