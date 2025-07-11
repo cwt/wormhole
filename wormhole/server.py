@@ -106,7 +106,8 @@ async def handle_connection(
                 uri,
                 ident,
                 allow_private,
-                verbose,
+                max_attempts=MAX_RETRY,
+                verbose=verbose,
             )
         else:
             # The check above ensures `headers` is `list[str]` and `payload` is `bytes`.
@@ -119,7 +120,8 @@ async def handle_connection(
                 payload,
                 ident,
                 allow_private,
-                verbose,
+                max_attempts=MAX_RETRY,
+                verbose=verbose,
             )
 
     except Exception as e:

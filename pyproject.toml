@@ -1,7 +1,7 @@
 # Main project metadata (PEP 621 standard)
 [project]
 name = "wormhole-proxy"
-version = "3.3.0"
+version = "3.3.1"
 description = "Asynchronous I/O HTTP and HTTPS Proxy on Python >= 3.11"
 readme = "README.md"
 authors = [
