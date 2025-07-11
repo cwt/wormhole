@@ -10,6 +10,7 @@ if sys.version_info < (3, 11):
 from .ad_blocker import update_database
 from .auth_manager import add_user, modify_user, delete_user
 from .logger import logger, setup_logger, format_log_message as flm
+from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
 from .version import VERSION
@@ -77,6 +78,7 @@ async def main_async(args) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: shutdown_event.set())
 
+    resolver.configure(args.verbose)
     server = await start_wormhole_server(
         args.host,
         args.port,

@@ -29,6 +29,7 @@
 ## Dependency
 
   - Python \>= 3.11
+  - aiodns
   - aiohttp
   - aiosqlite
   - loguru

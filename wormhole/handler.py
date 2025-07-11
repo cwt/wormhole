@@ -1,6 +1,7 @@
 from .logger import logger, format_log_message as flm
 from .safeguards import has_public_ipv6, is_ad_domain, is_private_ip
 from .tools import get_content_length, get_host_and_port
+from .resolver import resolver
 import asyncio
 import ipaddress
 import random
@@ -66,6 +67,7 @@ async def _resolve_and_validate_host(
 ) -> list[str]:
     """
     Resolves a hostname to a list of IPs, validates them, and caches the list.
+    Uses aiodns via a custom resolver that respects the local hosts file.
     Supports DNS load balancing and prioritizes IPv6 if available.
     Raises:
         PermissionError: If the host is an ad domain or resolves to only private IPs.
@@ -88,11 +90,9 @@ async def _resolve_and_validate_host(
             )
             return ip_list
 
-    # Resolve hostname
-    loop = asyncio.get_running_loop()
+    # Resolve hostname using aiodns resolver
     try:
-        addr_info_list = await loop.getaddrinfo(host, None, family=0)
-        resolved_ips = {info[4][0] for info in addr_info_list}
+        resolved_ips = await resolver.resolve(host)
     except OSError as e:
         raise OSError(f"Failed to resolve host: {host}") from e
 
