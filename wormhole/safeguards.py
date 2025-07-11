@@ -136,33 +136,44 @@ def load_allowlist(path: str, host: str) -> int:
 
 def is_ad_domain(hostname: str) -> bool:
     """
-    Checks if a hostname is blocked. It first checks against a runtime allowlist,
-    then checks the main blocklist.
+    Checks if a hostname is blocked using a more specific block/allow logic.
+    The blocklist is checked before the allowlist to allow for more granular control.
+
+    The order of checks is:
+    1. Exact match in blocklist -> Block
+    2. Exact match in allowlist -> Allow
+    3. Parent domain in blocklist -> Block
+    4. Parent domain in allowlist -> Allow
     """
     hostname_lower = hostname.lower()
 
-    # 1. Check the allowlist first.
-    if ALLOW_LIST_SET:
-        if hostname_lower in ALLOW_LIST_SET:
-            return False  # It's explicitly allowed
-        # Check for parent domains in allowlist
-        parts = hostname_lower.split(".")
-        for i in range(1, len(parts)):
-            parent_domain = ".".join(parts[i:])
-            if parent_domain in ALLOW_LIST_SET:
-                return False  # A parent domain is allowed
-
-    # 2. If not allowed, check the blocklist.
-    if not AD_BLOCK_SET:
-        return False
-
+    # --- Highest Priority: Check for an exact match in the blocklist ---
+    # This ensures that if 'ad-api.x.com' is specifically in the blocklist,
+    # it is blocked immediately, even if 'x.com' is on the allowlist.
     if hostname_lower in AD_BLOCK_SET:
         return True
 
+    # --- Second Priority: Check for an exact match in the allowlist ---
+    if hostname_lower in ALLOW_LIST_SET:
+        return False
+
+    # --- Third Priority: Check for parent domains in the blocklist ---
+    # This blocks subdomains of a blocked parent (e.g., if 'ad-server.com'
+    # is blocked, 'analytics.ad-server.com' will also be blocked).
     parts = hostname_lower.split(".")
     for i in range(1, len(parts)):
         parent_domain = ".".join(parts[i:])
         if parent_domain in AD_BLOCK_SET:
             return True
 
+    # --- Fourth Priority: Check for parent domains in the allowlist ---
+    # This allows subdomains of an allowed parent (e.g., if 'x.com' is
+    # allowed, 'www.x.com' will also be allowed), unless the subdomain
+    # itself was caught by the blocklist checks above.
+    for i in range(1, len(parts)):
+        parent_domain = ".".join(parts[i:])
+        if parent_domain in ALLOW_LIST_SET:
+            return False
+
+    # Default to not blocking if no specific rules match
     return False

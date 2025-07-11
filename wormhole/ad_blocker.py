@@ -100,32 +100,10 @@ async def update_database(
 ) -> None:
     """
     Fetches all public blocklists, filters them against an allowlist,
-    and compiles them into a SQLite database.
+    optimizes them, and compiles them into a SQLite database.
     """
     db_path = Path(db_path_str)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Start with the hardcoded default allowlist
-    allowlist_domains: set[str] = DEFAULT_ALLOWLIST.copy()
-    logger.info(
-        f"Loaded {len(allowlist_domains)} domains from the default allowlist."
-    )
-
-    # Add domains from the user-provided file, if any
-    if allowlist_path_str:
-        logger.info(f"Loading custom allowlist from: {allowlist_path_str}")
-        try:
-            with open(allowlist_path_str, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip() and not line.startswith("#"):
-                        allowlist_domains.add(line.strip().lower())
-            logger.info(
-                f"Total allowlist size is now {len(allowlist_domains)} domains."
-            )
-        except FileNotFoundError:
-            logger.warning(
-                "Custom allowlist file not found. Proceeding without it."
-            )
 
     # Fetch and parse all blocklists
     all_blocked_domains: set[str] = set()
@@ -141,13 +119,32 @@ async def update_database(
         f"Found {len(all_blocked_domains)} unique domains before filtering."
     )
 
-    # Remove allowed domains from the blocklist
+    # Load allowlist to filter domains before optimization and writing to the DB.
+    allowlist_domains: set[str] = DEFAULT_ALLOWLIST.copy()
+    if allowlist_path_str:
+        logger.info(f"Loading custom allowlist from: {allowlist_path_str}")
+        try:
+            with open(allowlist_path_str, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip() and not line.startswith("#"):
+                        allowlist_domains.add(line.strip().lower())
+            logger.info(
+                f"Total allowlist size is {len(allowlist_domains)} domains."
+            )
+        except FileNotFoundError:
+            logger.warning(
+                "Custom allowlist file not found. Proceeding with defaults."
+            )
+
+    # Remove any domains from the blocklist that are exactly in the allowlist.
+    # This allows a user to allow a parent domain (e.g., 'x.com') while still
+    # letting specific ad-serving subdomains (e.g., 'ad-api.x.com') be blocked.
     if allowlist_domains:
         original_count = len(all_blocked_domains)
         all_blocked_domains -= allowlist_domains
         num_removed = original_count - len(all_blocked_domains)
         logger.info(
-            f"Removed {num_removed} domains that were in the allowlist."
+            f"Removed {num_removed} domains that were present in the allowlist."
         )
 
     # Optimize the final blocklist
