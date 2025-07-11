@@ -1,6 +1,6 @@
 from .authentication import get_ident, verify_credentials
 from .handler import process_http_request, process_https_tunnel, parse_request
-from .logger import logger
+from .logger import logger, format_log_message as flm
 from time import time
 import asyncio
 import functools
@@ -45,22 +45,22 @@ async def handle_connection(
     CURRENT_TASKS += 1
     if verbose > 0:
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: {CURRENT_TASKS}/{MAX_TASKS} Tasks active"
+            flm(f"{CURRENT_TASKS}/{MAX_TASKS} Tasks active", ident, verbose)
         )
     else:
-        logger.debug(f"[{ident['id']}][{ident['client']}]: Connection started.")
+        logger.debug(flm("Connection started.", ident, verbose))
 
     try:
         # Parse the initial request from the client.
         request_line, headers, payload = await parse_request(
-            client_reader, MAX_RETRY, ident
+            client_reader, ident, verbose
         )
         # If parse_request fails, it returns (None, None, None). We check all three
         # to explicitly narrow the types for mypy, which can't infer that if one
         # is None, they all are.
         if not request_line or headers is None or payload is None:
             logger.debug(
-                f"[{ident['id']}][{ident['client']}]: Empty request, closing connection."
+                flm("Empty request, closing connection.", ident, verbose)
             )
             return
 
@@ -69,7 +69,11 @@ async def handle_connection(
             method, uri, version = request_line.split(" ", 2)
         except ValueError:
             logger.debug(
-                f"[{ident['id']}][{ident['client']}]: Malformed request line '{request_line}', closing."
+                flm(
+                    f"Malformed request line '{request_line}', closing.",
+                    ident,
+                    verbose,
+                )
             )
             return
 
@@ -86,14 +90,24 @@ async def handle_connection(
             )
             if user_ident is None:
                 logger.info(
-                    f"[{ident['id']}][{ident['client']}]: {method} 407 {uri} (Authentication Failed)"
+                    flm(
+                        f"{method} 407 {uri} (Authentication Failed)",
+                        ident,
+                        verbose,
+                    )
                 )
                 return
             ident = user_ident  # Update ident with authenticated user info.
         # --- Request Dispatching ---
         if method.upper() == "CONNECT":
             await process_https_tunnel(
-                client_reader, client_writer, method, uri, ident, allow_private
+                client_reader,
+                client_writer,
+                method,
+                uri,
+                ident,
+                allow_private,
+                verbose,
             )
         else:
             # The check above ensures `headers` is `list[str]` and `payload` is `bytes`.
@@ -106,11 +120,12 @@ async def handle_connection(
                 payload,
                 ident,
                 allow_private,
+                verbose,
             )
 
     except Exception as e:
         logger.error(
-            f"[{ident['id']}][{ident['client']}]: Unhandled error in connection handler: {e}",
+            flm(f"Unhandled error in connection handler: {e}", ident, verbose),
             exc_info=True,
         )
     finally:
@@ -120,7 +135,7 @@ async def handle_connection(
             await client_writer.wait_closed()
         duration = time() - start_time
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: Connection closed ({duration:.5f} seconds)."
+            flm(f"Connection closed ({duration:.5f} seconds).", ident, verbose)
         )
 
 
@@ -154,13 +169,21 @@ async def start_wormhole_server(
         for s in server.sockets:
             addr = s.getsockname()
             logger.info(
-                f"[000000][{host}]: Wormhole proxy bound and listening at {addr[0]}:{addr[1]}"
+                flm(
+                    f"Wormhole proxy bound and listening at {addr[0]}:{addr[1]}",
+                    ident={"id": "000000", "client": host},
+                    verbose=verbose,
+                )
             )
 
         return server
 
     except OSError as e:
         logger.critical(
-            f"[000000][{host}]: Failed to bind server at {host}:{port}: {e}"
+            flm(
+                f"Failed to bind server at {host}:{port}: {e}",
+                ident={"id": "000000", "client": host},
+                verbose=verbose,
+            )
         )
         raise

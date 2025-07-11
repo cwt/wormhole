@@ -1,4 +1,4 @@
-from .logger import logger
+from .logger import logger, format_log_message as flm
 from .safeguards import has_public_ipv6, is_ad_domain, is_private_ip
 from .tools import get_content_length, get_host_and_port
 import asyncio
@@ -19,6 +19,7 @@ async def relay_stream(
     writer: asyncio.StreamWriter,
     ident: dict[str, str],
     return_first_line: bool = False,
+    verbose: int = 0,
 ) -> bytes | None:
     """
     Relays data between a reader and a writer stream until EOF.
@@ -46,13 +47,13 @@ async def relay_stream(
             writer.write(data)
             await writer.drain()
     except (ConnectionResetError, BrokenPipeError) as e:
-        logger.debug(
-            f"[{ident['id']}][{ident['client']}]: Relay network error: {e}"
-        )
+        logger.debug(flm(f"Relay network error: {e}", ident, verbose))
     except Exception as e:
-        logger.exception(
-            f"[{ident['id']}][{ident['client']}]: Unexpected relay error: {e}",
-        )
+        msg = flm(f"Unexpected relay error: {e}", ident, verbose)
+        if verbose > 2:  # Show full traceback only for -vv
+            logger.exception(msg)
+        else:
+            logger.error(msg)
     finally:
         if not writer.is_closing():
             writer.close()
@@ -61,7 +62,7 @@ async def relay_stream(
 
 
 async def _resolve_and_validate_host(
-    host: str, allow_private: bool
+    host: str, ident: dict[str, str], allow_private: bool, verbose: int = 0
 ) -> list[str]:
     """
     Resolves a hostname to a list of IPs, validates them, and caches the list.
@@ -72,14 +73,18 @@ async def _resolve_and_validate_host(
     """
     # Ad-block check
     if is_ad_domain(host):
-        raise PermissionError(f"Blocked ad domain: {host}")
+        raise PermissionError(f"Blocked ad domain")
 
     # Check cache first
     if host in DNS_CACHE:
         ip_list, timestamp = DNS_CACHE[host]
         if time.time() - timestamp < DNS_CACHE_TTL:
             logger.debug(
-                f"DNS cache hit for '{host}'. ({len(DNS_CACHE)} hosts cached)"
+                flm(
+                    f"DNS cache hit for '{host}'. ({len(DNS_CACHE)} hosts cached)",
+                    ident,
+                    verbose,
+                )
             )
             return ip_list
 
@@ -109,7 +114,11 @@ async def _resolve_and_validate_host(
     final_ip_list = []
     if has_public_ipv6() and valid_ipv6s:
         logger.debug(
-            f"Host has public IPv6. Prioritizing {len(valid_ipv6s)} IPv6 addresses."
+            flm(
+                f"Host has public IPv6. Prioritizing {len(valid_ipv6s)} IPv6 addresses.",
+                ident,
+                verbose,
+            )
         )
         random.shuffle(valid_ipv6s)
         final_ip_list.extend(valid_ipv6s)
@@ -131,19 +140,30 @@ async def _resolve_and_validate_host(
     # Update cache
     DNS_CACHE[host] = (final_ip_list, time.time())
     logger.debug(
-        f"DNS cache miss for '{host}'. Resolved to {final_ip_list}. Caching. ({len(DNS_CACHE)} hosts cached)"
+        flm(
+            (
+                f"DNS cache miss for '{host}'. "
+                f"Resolved to {final_ip_list}. Caching. "
+                f"({len(DNS_CACHE)} hosts cached)"
+            ),
+            ident,
+            verbose,
+        )
     )
     return final_ip_list
 
 
 async def _create_connection_with_retries(
-    ip_list: list[str], port: int, ident: dict[str, str]
+    ip_list: list[str],
+    port: int,
+    ident: dict[str, str],
+    max_attempts: int = 3,
+    timeout: int = 5,
+    verbose: int = 0,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """
     Tries to connect to a list of IPs with a fast timeout and retry mechanism.
     """
-    max_attempts = 3
-    timeout = 5  # seconds
     last_error = None
 
     # Create a list of connection targets to try, ensuring we don't exceed max_attempts
@@ -154,7 +174,11 @@ async def _create_connection_with_retries(
     for i, ip in enumerate(targets_to_try):
         attempt = i + 1
         logger.debug(
-            f"Connection attempt {attempt}/{max_attempts} to {ip}:{port}"
+            flm(
+                f"Connection attempt {attempt}/{max_attempts} to {ip}:{port}",
+                ident,
+                verbose,
+            )
         )
         try:
             # Use a short timeout for each connection attempt
@@ -162,13 +186,21 @@ async def _create_connection_with_retries(
                 asyncio.open_connection(ip, port), timeout=timeout
             )
             logger.debug(
-                f"Successfully connected to {ip}:{port} on attempt {attempt}"
+                flm(
+                    f"Successfully connected to {ip}:{port} on attempt {attempt}",
+                    ident,
+                    verbose,
+                )
             )
             return reader, writer
         except (OSError, asyncio.TimeoutError) as e:
             last_error = e
             logger.warning(
-                f"Connection to {ip}:{port} failed on attempt {attempt}: {e}"
+                flm(
+                    f"Connection to {ip}:{port} failed on attempt {attempt}: {e}",
+                    ident,
+                    verbose,
+                )
             )
 
     raise OSError(
@@ -186,6 +218,7 @@ async def process_https_tunnel(
     uri: str,
     ident: dict[str, str],
     allow_private: bool,
+    verbose: int = 0,
 ) -> None:
     """Establishes an HTTPS tunnel and relays data between client and server."""
     host, port = get_host_and_port(uri)
@@ -194,11 +227,13 @@ async def process_https_tunnel(
 
     try:
         # Resolve and validate the host to get a list of potential IPs.
-        ip_list = await _resolve_and_validate_host(host, allow_private)
+        ip_list = await _resolve_and_validate_host(
+            host, ident, allow_private, verbose
+        )
 
         # Attempt to connect to one of the IPs with retry logic.
         server_reader, server_writer = await _create_connection_with_retries(
-            ip_list, port, ident
+            ip_list, port, ident, verbose=verbose
         )
 
         # Signal the client that the tunnel is established.
@@ -207,21 +242,30 @@ async def process_https_tunnel(
 
         # Use a TaskGroup for structured concurrency to relay data in both directions.
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(relay_stream(client_reader, server_writer, ident))
-            tg.create_task(relay_stream(server_reader, client_writer, ident))
+            tg.create_task(
+                relay_stream(
+                    client_reader, server_writer, ident, verbose=verbose
+                )
+            )
+            tg.create_task(
+                relay_stream(
+                    server_reader, client_writer, ident, verbose=verbose
+                )
+            )
 
-        logger.info(f"[{ident['id']}][{ident['client']}]: {method} 200 {uri}")
+        logger.info(flm(f"{method} 200 {uri}", ident, verbose))
 
     except PermissionError as e:
-        logger.warning(
-            f"[{ident['id']}][{ident['client']}]: {method} 403 {uri} ({e})"
-        )
+        logger.warning(flm(f"{method} 403 {uri} ({e})", ident, verbose))
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
     except Exception as e:
-        logger.exception(
-            f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
-        )
+        msg = flm(f"{method} 502 {uri} ({e})", ident, verbose)
+        if verbose > 2:  # Show full traceback only for -vv
+            logger.exception(msg)
+        else:
+            logger.error(msg)
+
     finally:
         # Ensure server streams are closed if they were opened.
         if server_writer and not server_writer.is_closing():
@@ -238,6 +282,8 @@ async def _send_http_request(
     headers: list[str],
     payload: bytes,
     ident: dict[str, str],
+    max_attempts: int = 3,
+    verbose: int = 0,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """Helper function to connect and send an HTTP request."""
     request_line = f"{method} {path or '/'} {version}".encode()
@@ -245,7 +291,7 @@ async def _send_http_request(
 
     # Attempt to connect to one of the IPs with retry logic.
     server_reader, server_writer = await _create_connection_with_retries(
-        ip_list, port, ident
+        ip_list, port, ident, max_attempts, verbose=verbose
     )
 
     server_writer.write(request_line + b"\r\n" + headers_bytes + b"\r\n\r\n")
@@ -265,6 +311,8 @@ async def process_http_request(
     payload: bytes,
     ident: dict[str, str],
     allow_private: bool,
+    max_attempts: int = 3,
+    verbose: int = 0,
 ) -> None:
     """Processes a standard HTTP request by forwarding it to the target server."""
     server_reader = None
@@ -300,12 +348,18 @@ async def process_http_request(
             return
 
         # Resolve and validate the host to get a list of potential IPs.
-        ip_list = await _resolve_and_validate_host(host, allow_private)
+        ip_list = await _resolve_and_validate_host(
+            host, ident, allow_private, verbose
+        )
 
         # --- Attempt to upgrade to HTTP/1.1 if needed ---
         if version == "HTTP/1.0":
             logger.debug(
-                f"[{ident['id']}][{ident['client']}]: Attempting to upgrade HTTP/1.0 request for {host_header} to HTTP/1.1"
+                flm(
+                    f"Attempting to upgrade HTTP/1.0 request for {host_header} to HTTP/1.1",
+                    ident,
+                    verbose,
+                )
             )
 
             # Prepare headers for HTTP/1.1
@@ -332,10 +386,16 @@ async def process_http_request(
                     headers_v1_1,
                     payload,
                     ident,
+                    max_attempts,
+                    verbose,
                 )
             except Exception as e:
                 logger.warning(
-                    f"[{ident['id']}][{ident['client']}]: HTTP/1.1 upgrade failed ({e}). Falling back to HTTP/1.0."
+                    flm(
+                        f"HTTP/1.1 upgrade failed ({e}). Falling back to HTTP/1.0.",
+                        ident,
+                        verbose,
+                    )
                 )
                 if server_writer and not server_writer.is_closing():
                     server_writer.close()
@@ -361,6 +421,8 @@ async def process_http_request(
                     original_headers,
                     payload,
                     ident,
+                    max_attempts,
+                    verbose,
                 )
         else:
             # Original request was already HTTP/1.1 or newer
@@ -385,11 +447,17 @@ async def process_http_request(
                 final_headers,
                 payload,
                 ident,
+                max_attempts,
+                verbose,
             )
 
         # Relay the server's response back to the client.
         response_status_line = await relay_stream(
-            server_reader, client_writer, ident, return_first_line=True
+            server_reader,
+            client_writer,
+            ident,
+            return_first_line=True,
+            verbose=verbose,
         )
 
         # Log the outcome.
@@ -398,26 +466,24 @@ async def process_http_request(
             if response_status_line
             else 502
         )
-        logger.info(
-            f"[{ident['id']}][{ident['client']}]: {method} {response_code} {uri}"
-        )
+        logger.info(flm(f"{method} {response_code} {uri}", ident, verbose))
 
     except PermissionError as e:
-        logger.warning(
-            f"[{ident['id']}][{ident['client']}]: {method} 403 {uri} ({e})"
-        )
+        logger.warning(flm(f"{method} 403 {uri} ({e})", ident, verbose))
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
     except Exception as e:
-        logger.exception(
-            f"[{ident['id']}][{ident['client']}]: {method} 502 {uri} ({e})"
-        )
+        msg = flm(f"{method} 502 {uri} ({e})", ident, verbose)
+        if verbose > 2:  # Show full traceback only for -vv
+            logger.exception(msg)
+        else:
+            logger.error(msg)
         if not client_writer.is_closing():
             try:
                 client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
                 await client_writer.drain()
             except ConnectionError:
-                pass
+                pass  # Ignore if client is already closed
     finally:
         if server_writer and not server_writer.is_closing():
             server_writer.close()
@@ -425,7 +491,7 @@ async def process_http_request(
 
 
 async def parse_request(
-    client_reader: asyncio.StreamReader, max_retry: int, ident: dict[str, str]
+    client_reader: asyncio.StreamReader, ident: dict[str, str], verbose: int = 0
 ) -> tuple[str, list[str], bytes] | tuple[None, None, None]:
     """
     Parses the initial request from the client.
@@ -443,7 +509,7 @@ async def parse_request(
         )
     except (asyncio.IncompleteReadError, asyncio.TimeoutError) as e:
         logger.debug(
-            f"[{ident['id']}][{ident['client']}]: Failed to read initial request: {e}"
+            flm(f"Failed to read initial request: {e}", ident, verbose)
         )
         return None, None, None
 
@@ -459,9 +525,7 @@ async def parse_request(
         try:
             payload = await client_reader.readexactly(content_length)
         except asyncio.IncompleteReadError:
-            logger.debug(
-                f"[{ident['id']}][{ident['client']}]: Incomplete payload read."
-            )
+            logger.debug(flm(f"Incomplete payload read.", ident, verbose))
             return None, None, None
 
     return request_line, headers, payload

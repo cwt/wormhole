@@ -1,12 +1,66 @@
 from loguru import logger
+import asyncio
 import logging.handlers
 import os
 import sys
 
+
+class LogThrottler:
+    """A class to throttle and summarize repeated log messages."""
+
+    def __init__(self, logger, level: str, delay: float = 5.0):
+        """Initializes the log throttler with a level name and delay."""
+        self.logger = logger
+        self.level = level.upper()  # Store the level name, e.g., "ERROR"
+        self.delay = delay
+        self.last_message: str | None = None
+        self.repeat_count: int = 0
+        self.timer: asyncio.TimerHandle | None = None
+
+    def _flush_summary(self, **kwargs):
+        """Prints the summary of how many times the last message was repeated."""
+        if self.repeat_count > 2:
+            self.logger.opt(depth=2).log(
+                self.level,
+                f"{self.last_message} (and {self.repeat_count -1} more in the last {self.delay} seconds.)",
+                **kwargs,
+            )
+        elif self.repeat_count == 2:
+            # If the message was repeated only once, we log it directly.
+            self.logger.opt(depth=2).log(
+                self.level, self.last_message, **kwargs
+            )
+
+        # Reset the state
+        self.timer = None
+        self.last_message = None
+        self.repeat_count = 0
+
+    def process(self, message: str, **kwargs):
+        """Processes a log message, either logging it or incrementing a repeat counter."""
+        if self.last_message and message != self.last_message:
+            if self.timer:
+                self.timer.cancel()
+            self._flush_summary()
+
+        if message == self.last_message:
+            self.repeat_count += 1
+        else:
+            # It's a new message. Log it immediately, but look 1 frame up the stack.
+            # This ensures the log record shows the original caller (e.g., wormhole.handler).
+            self.logger.opt(depth=1).log(self.level, message, **kwargs)
+            self.last_message = message
+            self.repeat_count = 1
+
+        if self.timer:
+            self.timer.cancel()
+
+        loop = asyncio.get_running_loop()
+        self.timer = loop.call_later(self.delay, self._flush_summary)
+
+
 # In loguru, the logger is imported and ready to be configured.
 # We just need to ensure other modules import this configured instance.
-
-
 def setup_logger(
     syslog_host: str | None = None, syslog_port: int = 514, verbose: int = 0
 ) -> None:
@@ -56,3 +110,27 @@ def setup_logger(
     logging.getLogger("asyncio").setLevel(
         logging.DEBUG if verbose >= 2 else logging.CRITICAL
     )
+    if verbose < 2:
+        logger.info = LogThrottler(logger, "info").process
+        logger.warning = LogThrottler(logger, "warning").process
+        logger.error = LogThrottler(logger, "error").process
+
+
+def format_log_message(
+    message: str, ident: dict[str, str], verbose: int
+) -> str:
+    """
+    Formats a log message with the given identifier.
+
+    Args:
+        message: The log message to format.
+        ident: A dictionary containing identifiers like 'id' and 'client'.
+        verbose: The verbosity level of the logger.
+
+    Returns:
+        A formatted log message string.
+    """
+    if verbose > 1:
+        return f"[{ident['id']}][{ident['client']}]: {message}"
+    else:
+        return f"[{ident['client']}]: {message}"

@@ -9,7 +9,7 @@ if sys.version_info < (3, 11):
 
 from .ad_blocker import update_database
 from .auth_manager import add_user, modify_user, delete_user
-from .logger import logger, setup_logger
+from .logger import logger, setup_logger, format_log_message as flm
 from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
 from .version import VERSION
@@ -32,22 +32,42 @@ except ImportError:
 async def main_async(args) -> None:
     """The main asynchronous function to run the server."""
     if uvloop:
-        logger.info(f"Using high-performance event loop: {uvloop.__name__}")
+        logger.info(
+            flm(
+                f"Using high-performance event loop: {uvloop.__name__}",
+                ident={"id": "000000", "client": args.host},
+                verbose=args.verbose,
+            )
+        )
     else:
-        logger.info("Using standard asyncio event loop.")
+        logger.info(
+            flm(
+                "Using standard asyncio event loop.",
+                ident={"id": "000000", "client": args.host},
+                verbose=args.verbose,
+            )
+        )
 
     if args.allowlist:
-        num_allowed = load_allowlist(args.allowlist)
+        num_allowed = load_allowlist(args.allowlist, args.host)
         if num_allowed > 0:
             logger.info(
-                f"Loaded custom allowlist. Total allowlist size: {num_allowed} domains."
+                flm(
+                    f"Loaded custom allowlist. Total allowlist size: {num_allowed} domains.",
+                    ident={"id": "000000", "client": args.host},
+                    verbose=args.verbose,
+                )
             )
 
     if args.ad_block_db:
-        num_blocked = await load_ad_block_db(args.ad_block_db)
+        num_blocked = await load_ad_block_db(args.ad_block_db, args.host)
         if num_blocked > 0:
             logger.info(
-                f"Ad-blocker enabled with {num_blocked} domains from database."
+                flm(
+                    f"Ad-blocker enabled with {num_blocked} domains from database.",
+                    ident={"id": "000000", "client": args.host},
+                    verbose=args.verbose,
+                )
             )
 
     shutdown_event = asyncio.Event()
@@ -65,16 +85,34 @@ async def main_async(args) -> None:
         args.allow_private,
     )
 
-    logger.info("Server startup complete. Waiting for connections...")
+    logger.info(
+        flm(
+            "Server startup complete. Waiting for connections...",
+            ident={"id": "000000", "client": args.host},
+            verbose=args.verbose,
+        )
+    )
 
     # Wait for the shutdown signal.
     await shutdown_event.wait()
 
     # Gracefully shut down the server.
-    logger.info("Shutdown signal received, closing server...")
+    logger.info(
+        flm(
+            f"Shutdown signal received, closing server...",
+            ident={"id": "000000", "client": args.host},
+            verbose=args.verbose,
+        )
+    )
     server.close()
     await server.wait_closed()
-    logger.info("Server has been shut down gracefully.")
+    logger.info(
+        flm(
+            f"Server has been shut down gracefully.",
+            ident={"id": "000000", "client": args.host},
+            verbose=args.verbose,
+        )
+    )
 
 
 def main() -> int:

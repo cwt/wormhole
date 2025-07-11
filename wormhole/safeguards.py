@@ -83,13 +83,14 @@ def is_private_ip(ip_str: str) -> bool:
         return True
 
 
-async def load_ad_block_db(path: str) -> int:
+async def load_ad_block_db(path: str, host: str) -> int:
     """
     Loads a list of domains to block from a SQLite database into a global set
     for fast in-memory access.
 
     Args:
         path: The path to the SQLite database file.
+        host: The host IP of the server, used for logging.
 
     Returns:
         The number of unique domains loaded into the blocklist.
@@ -103,7 +104,7 @@ async def load_ad_block_db(path: str) -> int:
                     AD_BLOCK_SET.add(row[0])
     except Exception as e:
         logger.error(
-            f"Could not load ad-block database from '{path}': {e}",
+            f"[000000][{host}]: Could not load ad-block database from '{path}': {e}",
         )
 
     if AD_BLOCK_SET:
@@ -112,13 +113,13 @@ async def load_ad_block_db(path: str) -> int:
         content_size = sum(sys.getsizeof(s) for s in AD_BLOCK_SET)
         total_size_mb = (set_size + content_size) / (1024 * 1024)
         logger.debug(
-            f"Ad-block set memory usage: ~{total_size_mb:.2f} MB for {len(AD_BLOCK_SET)} domains"
+            f"[000000][{host}]: Ad-block set memory usage: ~{total_size_mb:.2f} MB for {len(AD_BLOCK_SET)} domains"
         )
 
     return len(AD_BLOCK_SET)
 
 
-def load_allowlist(path: str) -> int:
+def load_allowlist(path: str, host: str) -> int:
     """
     Loads domains from a user-provided file and adds them to the global allowlist set.
     """
@@ -128,7 +129,7 @@ def load_allowlist(path: str) -> int:
                 if line.strip() and not line.startswith("#"):
                     ALLOW_LIST_SET.add(line.strip().lower())
     except FileNotFoundError:
-        logger.error(f"Allowlist file not found at '{path}'")
+        logger.error(f"[000000][{host}]: Allowlist file not found at '{path}'")
     return len(ALLOW_LIST_SET)
 
 

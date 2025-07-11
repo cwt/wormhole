@@ -28,7 +28,7 @@ def _secure_create_file(path: Path) -> bool:
     if sys.platform == "win32":
         # On Windows, we rely on default user permissions and warn if the filesystem is not NTFS.
         try:
-            import win32api
+            import win32api  # noqa
 
             fs_type = win32api.GetVolumeInformation(
                 str(path.resolve().drive) + "\\"
