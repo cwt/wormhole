@@ -7,7 +7,7 @@ import asyncio
 import re
 
 # A curated list of popular and well-maintained ad-block lists
-BLOCKLIST_URLS = [
+BLOCKLIST_URLS: list[str] = [
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
     "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
     "https://easylist.to/easylist/easylist.txt",
@@ -25,7 +25,7 @@ DOMAIN_REGEX = re.compile(
 
 async def _fetch_list(session: aiohttp.ClientSession, url: str) -> str:
     """Fetches the content of a single blocklist URL with a retry mechanism."""
-    max_retries = 3
+    max_retries: int = 3
     timeout = aiohttp.ClientTimeout(total=15)  # seconds
     for attempt in range(max_retries):
         try:
@@ -79,8 +79,8 @@ def _filter_redundant_domains(domains: set[str]) -> set[str]:
     e.g., if 'example.com' is present, 'ad.example.com' is removed.
     """
     # Sort by length descending to ensure we process subdomains before parents
-    sorted_domains = sorted(list(domains), key=len, reverse=True)
-    optimized_set = set(sorted_domains)
+    sorted_domains: list[str] = sorted(list(domains), key=len, reverse=True)
+    optimized_set: set[str] = set(sorted_domains)
 
     for domain in sorted_domains:
         parts = domain.split(".")
@@ -106,7 +106,7 @@ async def update_database(
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Start with the hardcoded default allowlist
-    allowlist_domains = DEFAULT_ALLOWLIST.copy()
+    allowlist_domains: set[str] = DEFAULT_ALLOWLIST.copy()
     logger.info(
         f"Loaded {len(allowlist_domains)} domains from the default allowlist."
     )
@@ -152,8 +152,10 @@ async def update_database(
 
     # Optimize the final blocklist
     logger.info("Optimizing list by removing redundant subdomains...")
-    optimized_domains = _filter_redundant_domains(all_blocked_domains)
-    num_redundant_removed = len(all_blocked_domains) - len(optimized_domains)
+    optimized_domains: set[str] = _filter_redundant_domains(all_blocked_domains)
+    num_redundant_removed: int = len(all_blocked_domains) - len(
+        optimized_domains
+    )
     logger.info(
         f"Optimization complete. Removed {num_redundant_removed} redundant domains."
     )

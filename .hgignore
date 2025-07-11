@@ -5,3 +5,5 @@ dist
 .egg-info
 .mypy_cache
 *.sqlite3
+*.passwd
+*.auth

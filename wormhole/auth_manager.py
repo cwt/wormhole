@@ -1,19 +1,20 @@
 from pathlib import Path
+from typing import Any
 import getpass
 import hashlib
 import os
 import stat
 import sys
 
-REALM = "Wormhole Proxy"
-HASH_ALGORITHM = hashlib.sha256  # Use SHA-256
+REALM: str = "Wormhole Proxy"
+HASH_ALGORITHM = hashlib.sha256
 
 
 def _get_password_confirm() -> str | None:
     """Gets and confirms a new password from the user."""
     try:
-        p1 = getpass.getpass()
-        p2 = getpass.getpass("Retype password: ")
+        p1: str = getpass.getpass()
+        p2: str = getpass.getpass("Retype password: ")
         if p1 != p2:
             print("Passwords do not match.", file=sys.stderr)
             return None
@@ -61,9 +62,9 @@ def _secure_create_file(path: Path) -> bool:
             return False
 
 
-def _read_auth_file(path: Path) -> dict:
+def _read_auth_file(path: Path) -> dict[str, Any]:
     """Reads the auth file into a dictionary."""
-    users = {}
+    users: dict[str, Any] = {}
     if path.is_file():
         with open(path, "r", encoding="utf-8") as f:
             for line in f:

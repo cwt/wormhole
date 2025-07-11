@@ -79,12 +79,11 @@ async def handle_connection(
 
         # --- Authentication Check ---
         if auth_file_path:
-            # Pass method and uri for Digest authentication calculation
+            # Pass method for Digest authentication calculation
             user_ident = await verify_credentials(
                 client_reader,
                 client_writer,
                 method,
-                uri,
                 headers,
                 auth_file_path,
             )

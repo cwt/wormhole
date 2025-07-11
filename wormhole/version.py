@@ -1,3 +1,3 @@
 from importlib.metadata import version
 
-VERSION = version("wormhole-proxy")
+VERSION: str = version("wormhole-proxy")

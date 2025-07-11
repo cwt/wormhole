@@ -5,7 +5,7 @@ import re
 import secrets
 
 # This must match the REALM in auth_manager.py
-REALM = "Wormhole Proxy"
+REALM: str = "Wormhole Proxy"
 HASH_ALGORITHM = hashlib.sha256
 
 # Caches for performance
@@ -46,10 +46,13 @@ def _load_auth_file(path: Path) -> dict | None:
     return _auth_file_cache
 
 
+# This regex handles quoted and unquoted values
+QUOTE_UNQUOTE_RE = re.compile(r'(\w+)=(?:"([^"]*)"|([^\s,]*))')
+
+
 def _parse_digest_header(header_value: str) -> dict[str, str]:
     """Parses the Digest authentication header into a dictionary."""
-    # This regex handles quoted and unquoted values
-    parts = re.findall(r'(\w+)=(?:"([^"]*)"|([^\s,]*))', header_value)
+    parts = QUOTE_UNQUOTE_RE.findall(header_value)
     # The regex produces tuples like ('key', 'quoted_val', ''), so we merge
     return {key: val1 or val2 for key, val1, val2 in parts}
 
@@ -80,7 +83,6 @@ async def verify_credentials(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     method: str,  # HTTP Method (e.g., 'CONNECT') is needed for HA2 calculation
-    uri: str,  # The original URI from the request line
     headers: list[str],
     auth_file_path: str,
 ) -> dict[str, str] | None:

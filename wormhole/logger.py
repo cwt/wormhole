@@ -22,7 +22,8 @@ class LogThrottler:
         if self.repeat_count > 2:
             self.logger.opt(depth=2).log(
                 self.level,
-                f"{self.last_message} (and {self.repeat_count -1} more in the last {self.delay} seconds.)",
+                f"{self.last_message} "
+                f"(and {self.repeat_count -1} more in the last {self.delay} seconds.)",
                 **kwargs,
             )
         elif self.repeat_count == 2:
@@ -111,9 +112,9 @@ def setup_logger(
         logging.DEBUG if verbose >= 2 else logging.CRITICAL
     )
     if verbose < 2:
-        logger.info = LogThrottler(logger, "info").process
-        logger.warning = LogThrottler(logger, "warning").process
-        logger.error = LogThrottler(logger, "error").process
+        logger.info = LogThrottler(logger, "info").process  # type: ignore
+        logger.warning = LogThrottler(logger, "warning").process  # type: ignore
+        logger.error = LogThrottler(logger, "error").process  # type: ignore
 
 
 def format_log_message(
