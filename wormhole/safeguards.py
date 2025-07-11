@@ -20,6 +20,7 @@ DEFAULT_ALLOWLIST: set[str] = {
     "data.jsdelivr.com",  # jsDelivr API
     "esm.run",  # jsDelivr for JavaScript modules
     "unpkg.com",  # Unpkg CDN
+    "bing.com",  # Bing for search functionality
     "twitter.com",  # Twitter for social media integration
     "x.com",  # X (formerly Twitter) for social media integration"
 }
