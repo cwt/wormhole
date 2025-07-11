@@ -78,7 +78,6 @@ async def main_async(args) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: shutdown_event.set())
 
-    resolver.configure(args.verbose)
     server = await start_wormhole_server(
         args.host,
         args.port,
@@ -212,7 +211,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Print license information and exit.
+    # --- Utility Command Handling ---
+    # These commands run synchronously and exit.
     if args.license:
         print(parser.description)
         try:
@@ -224,7 +224,6 @@ def main() -> int:
             return 1
         return 0
 
-    # Handle authentication management commands.
     if args.auth_add:
         return add_user(args.auth_add[0], args.auth_add[1])
     if args.auth_mod:
@@ -232,12 +231,22 @@ def main() -> int:
     if args.auth_del:
         return delete_user(args.auth_del[0], args.auth_del[1])
 
-    # Setup the uvloop before any other operations thay migh use the event loop.
+    # --- Server and DB Update Handling ---
+    # Determine if we are running the full async server or a utility.
+    is_server_mode = not args.update_ad_block_db
+
+    # Setup the uvloop before any other operations that might use the event loop.
     if uvloop:
         uvloop.install()
 
-    # Setup logging before any other operations.
-    setup_logger(args.syslog_host, args.syslog_port, args.verbose)
+    # Setup logging. Disable async features for synchronous utility commands.
+    setup_logger(
+        args.syslog_host,
+        args.syslog_port,
+        args.verbose,
+        async_mode=is_server_mode,
+    )
+    resolver.configure(verbose=args.verbose)
 
     if args.update_ad_block_db:
         # For this standalone utility, configure a simple logger to show progress.
@@ -251,6 +260,7 @@ def main() -> int:
             return 1
         return 0
 
+    # --- Main Server Execution ---
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535.")
 

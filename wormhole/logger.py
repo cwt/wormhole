@@ -63,7 +63,10 @@ class LogThrottler:
 # In loguru, the logger is imported and ready to be configured.
 # We just need to ensure other modules import this configured instance.
 def setup_logger(
-    syslog_host: str | None = None, syslog_port: int = 514, verbose: int = 0
+    syslog_host: str | None = None,
+    syslog_port: int = 514,
+    verbose: int = 0,
+    async_mode: bool = True,
 ) -> None:
     """
     Configures the global loguru logger instance. This should only be called once.
@@ -111,7 +114,9 @@ def setup_logger(
     logging.getLogger("asyncio").setLevel(
         logging.DEBUG if verbose >= 2 else logging.CRITICAL
     )
-    if verbose < 2:
+
+    # Only enable the async LogThrottler if we are in async mode.
+    if async_mode and verbose < 2:
         logger.info = LogThrottler(logger, "info").process  # type: ignore
         logger.warning = LogThrottler(logger, "warning").process  # type: ignore
         logger.error = LogThrottler(logger, "error").process  # type: ignore
