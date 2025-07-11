@@ -153,58 +153,93 @@ async def _resolve_and_validate_host(
     return final_ip_list
 
 
-async def _create_connection_with_retries(
+async def _create_fastest_connection(
     ip_list: list[str],
     port: int,
     ident: dict[str, str],
-    max_attempts: int = 3,
     timeout: int = 5,
+    max_attempts: int = 3,
     verbose: int = 0,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """
-    Tries to connect to a list of IPs with a fast timeout and retry mechanism.
+    Implements a robust "Happy Eyeballs" connection algorithm with retries.
+    It wraps the concurrent connection logic in a retry loop.
     """
     last_error = None
 
-    # Create a list of connection targets to try, ensuring we don't exceed max_attempts
-    targets_to_try = (ip_list * (max_attempts // len(ip_list) + 1))[
-        :max_attempts
-    ]
-
-    for i, ip in enumerate(targets_to_try):
-        attempt = i + 1
+    for attempt in range(max_attempts):
         logger.debug(
             flm(
-                f"Connection attempt {attempt}/{max_attempts} to {ip}:{port}",
+                f"Connection attempt {attempt + 1}/{max_attempts} to {ip_list}",
                 ident,
                 verbose,
             )
         )
-        try:
-            # Use a short timeout for each connection attempt
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port), timeout=timeout
+
+        tasks = {
+            asyncio.create_task(
+                asyncio.wait_for(
+                    asyncio.open_connection(ip, port), timeout=timeout
+                ),
+                name=ip,
             )
-            logger.debug(
-                flm(
-                    f"Successfully connected to {ip}:{port} on attempt {attempt}",
-                    ident,
-                    verbose,
-                )
-            )
-            return reader, writer
-        except (OSError, asyncio.TimeoutError) as e:
-            last_error = e
-            logger.warning(
-                flm(
-                    f"Connection to {ip}:{port} failed on attempt {attempt}: {e}",
-                    ident,
-                    verbose,
-                )
+            for ip in ip_list
+        }
+
+        # Inner loop for the "Happy Eyeballs" race
+        while tasks:
+            done, pending = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED
             )
 
+            for task in done:
+                try:
+                    reader, writer = task.result()
+                    # On success, cancel pending tasks and return the connection
+                    for p_task in pending:
+                        p_task.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
+                    peer = writer.get_extra_info("peername")
+                    logger.debug(
+                        flm(
+                            f"Successfully established fastest connection to {peer[0]}:{peer[1]}",
+                            ident,
+                            verbose,
+                        )
+                    )
+                    return reader, writer
+                except (
+                    OSError,
+                    asyncio.TimeoutError,
+                    asyncio.CancelledError,
+                ) as e:
+                    ip = task.get_name()
+                    logger.debug(
+                        flm(
+                            f"Connection to {ip}:{port} failed within race: {e}",
+                            ident,
+                            verbose,
+                        )
+                    )
+                    last_error = e
+
+            tasks = pending
+
+        # If the inner loop finishes, all IPs failed in this attempt.
+        # Wait before the next retry, if any.
+        if attempt < max_attempts - 1:
+            logger.warning(
+                flm(
+                    f"All connections failed on attempt {attempt + 1}. Retrying in 1 second...",
+                    ident,
+                    verbose,
+                )
+            )
+            await asyncio.sleep(1)
+
     raise OSError(
-        f"Failed to connect after {max_attempts} attempts. Last error: {last_error}"
+        f"All connection attempts failed after {max_attempts} retries. Last error: {last_error}"
     )
 
 
@@ -218,6 +253,7 @@ async def process_https_tunnel(
     uri: str,
     ident: dict[str, str],
     allow_private: bool,
+    max_attempts: int = 3,
     verbose: int = 0,
 ) -> None:
     """Establishes an HTTPS tunnel and relays data between client and server."""
@@ -230,10 +266,8 @@ async def process_https_tunnel(
         ip_list = await _resolve_and_validate_host(
             host, ident, allow_private, verbose
         )
-
-        # Attempt to connect to one of the IPs with retry logic.
-        server_reader, server_writer = await _create_connection_with_retries(
-            ip_list, port, ident, verbose=verbose
+        server_reader, server_writer = await _create_fastest_connection(
+            ip_list, port, ident, max_attempts=max_attempts, verbose=verbose
         )
 
         # Signal the client that the tunnel is established.
@@ -259,6 +293,7 @@ async def process_https_tunnel(
         logger.warning(flm(f"{method} 403 {uri} ({e})", ident, verbose))
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
+
     except Exception as e:
         msg = flm(f"{method} 502 {uri} ({e})", ident, verbose)
         if verbose > 2:  # Show full traceback only for -vv
@@ -288,10 +323,8 @@ async def _send_http_request(
     """Helper function to connect and send an HTTP request."""
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
-
-    # Attempt to connect to one of the IPs with retry logic.
-    server_reader, server_writer = await _create_connection_with_retries(
-        ip_list, port, ident, max_attempts, verbose=verbose
+    server_reader, server_writer = await _create_fastest_connection(
+        ip_list, port, ident, max_attempts=max_attempts, verbose=verbose
     )
 
     server_writer.write(request_line + b"\r\n" + headers_bytes + b"\r\n\r\n")
@@ -429,13 +462,16 @@ async def process_http_request(
             final_headers = [
                 h for h in headers if not h.lower().startswith("proxy-")
             ]
+
             if not any(h.lower().startswith("host:") for h in final_headers):
                 final_headers.insert(0, f"Host: {host_header}")
+
             final_headers = [
                 h
                 for h in final_headers
                 if not h.lower().startswith("connection:")
             ]
+
             final_headers.append("Connection: close")
 
             server_reader, server_writer = await _send_http_request(
@@ -472,6 +508,7 @@ async def process_http_request(
         logger.warning(flm(f"{method} 403 {uri} ({e})", ident, verbose))
         client_writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
         await client_writer.drain()
+
     except Exception as e:
         msg = flm(f"{method} 502 {uri} ({e})", ident, verbose)
         if verbose > 2:  # Show full traceback only for -vv
@@ -484,6 +521,7 @@ async def process_http_request(
                 await client_writer.drain()
             except ConnectionError:
                 pass  # Ignore if client is already closed
+
     finally:
         if server_writer and not server_writer.is_closing():
             server_writer.close()
