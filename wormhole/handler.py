@@ -303,9 +303,13 @@ async def process_https_tunnel(
 
     finally:
         # Ensure server streams are closed if they were opened.
-        if server_writer and not server_writer.is_closing():
+        if server_writer is not None and not server_writer.is_closing():
             server_writer.close()
-            await server_writer.wait_closed()
+            wc = getattr(server_writer, "wait_closed", None)
+            if callable(wc):
+                result = wc()
+                if asyncio.iscoroutine(result):
+                    await result
 
 
 async def _send_http_request(
@@ -432,7 +436,11 @@ async def process_http_request(
                 )
                 if server_writer and not server_writer.is_closing():
                     server_writer.close()
-                    await server_writer.wait_closed()
+                    wc = getattr(server_writer, "wait_closed", None)
+                    if callable(wc):
+                        result = wc()
+                        if asyncio.iscoroutine(result):
+                            await result
 
                 # Attempt 2: Fallback to original HTTP/1.0
                 original_headers = [
