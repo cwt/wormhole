@@ -86,11 +86,18 @@ async def main_async(args) -> None:
 
     shutdown_event = asyncio.Event()
 
+    def _shutdown_handler():
+        """Handles shutdown signals to gracefully stop the server."""
+        shutdown_event.set()
+
     # Set up signal handlers for graceful shutdown.
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: shutdown_event.set())
+    [
+        loop.add_signal_handler(sig, _shutdown_handler)
+        for sig in (signal.SIGINT, signal.SIGTERM)
+    ]
 
+    # Start the Wormhole server with the provided arguments.
     server = await start_wormhole_server(
         args.host,
         args.port,
@@ -99,6 +106,7 @@ async def main_async(args) -> None:
         args.allow_private,
     )
 
+    # Log the server startup completion, 000000 means internal server ID.
     logger.info(
         flm(
             "Server startup complete. Waiting for connections...",
