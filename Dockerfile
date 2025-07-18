@@ -16,8 +16,8 @@ WORKDIR /app
 # We pin the version for consistent builds and use a virtual environment for poetry itself.
 ENV POETRY_HOME=/opt/poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
-RUN microdnf install -y python3-devel gcc && \
-    python3 -m venv $POETRY_HOME && \
+RUN microdnf install -y python3.12-devel gcc && \
+    python3.12 -m venv $POETRY_HOME && \
     $POETRY_HOME/bin/pip install poetry==${POETRY_VERSION} && \
     microdnf clean all
 
@@ -44,7 +44,7 @@ FROM almalinux:${ALMA_IMAGE}
 WORKDIR /app
 
 # Install only the necessary runtime dependencies, and set up a non-root user.
-RUN microdnf install -y python3-libs shadow-utils && \
+RUN microdnf install -y python3.12-libs shadow-utils && \
     useradd --create-home --shell /bin/bash wormhole && \
     microdnf remove -y shadow-utils && \
     microdnf clean all
