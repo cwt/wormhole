@@ -7,6 +7,8 @@ import sys
 
 # A hardcoded default allowlist for most known safe domains.
 DEFAULT_ALLOWLIST: set[str] = {
+    "bit.ly",  # Bitly for URL shortening
+    "azurewebsites.net",  # Azure Web App
     "s3.amazonaws.com",  # Amazon S3 for static assets"
     "fonts.googleapis.com",  # Google Fonts
     "safebrowsing.googleapis.com",  # Google Safe Browsing for security
