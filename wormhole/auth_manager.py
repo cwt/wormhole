@@ -11,7 +11,12 @@ HASH_ALGORITHM = hashlib.sha256
 
 
 def _get_password_confirm() -> str | None:
-    """Gets and confirms a new password from the user."""
+    """
+    Gets and confirms a new password from the user.
+
+    Returns:
+        str or None: The confirmed password if successful, None otherwise.
+    """
     try:
         p1: str = getpass.getpass()
         p2: str = getpass.getpass("Retype password: ")
@@ -25,7 +30,15 @@ def _get_password_confirm() -> str | None:
 
 
 def _secure_create_file(path: Path) -> bool:
-    """Creates a file with secure permissions (0600) and a warning for unsupported filesystems."""
+    """
+    Creates a file with secure permissions (0600) and a warning for unsupported filesystems.
+
+    Args:
+        path (Path): The path to the file to create.
+
+    Returns:
+        bool: True if the file was created successfully, False otherwise.
+    """
     if sys.platform == "win32":
         # On Windows, we rely on default user permissions and warn if the filesystem is not NTFS.
         try:
@@ -63,7 +76,15 @@ def _secure_create_file(path: Path) -> bool:
 
 
 def _read_auth_file(path: Path) -> dict[str, Any]:
-    """Reads the auth file into a dictionary."""
+    """
+    Reads the authentication file into a dictionary.
+
+    Args:
+        path (Path): The path to the authentication file.
+
+    Returns:
+        dict: A dictionary where keys are usernames and values are dictionaries containing realm and hash.
+    """
     users: dict[str, Any] = {}
     if path.is_file():
         with open(path, "r", encoding="utf-8") as f:
@@ -77,14 +98,29 @@ def _read_auth_file(path: Path) -> dict[str, Any]:
 
 
 def _write_auth_file(path: Path, users: dict) -> None:
-    """Writes the dictionary back to the auth file."""
+    """
+    Writes the dictionary back to the authentication file.
+
+    Args:
+        path (Path): The path to the authentication file.
+        users (dict): The dictionary containing user data.
+    """
     with open(path, "w", encoding="utf-8") as f:
         for user, data in users.items():
             f.write(f"{user}:{data['realm']}:{data['hash']}\n")
 
 
 def add_user(auth_file_str: str, username: str) -> int:
-    """Adds a new user to the specified digest file."""
+    """
+    Adds a new user to the specified digest file.
+
+    Args:
+        auth_file_str (str): The path to the authentication file.
+        username (str): The username to add.
+
+    Returns:
+        int: 0 if the user was added successfully, 1 if an error occurred.
+    """
     auth_path = Path(auth_file_str)
     if not auth_path.exists():
         if not _secure_create_file(auth_path):
@@ -115,7 +151,16 @@ def add_user(auth_file_str: str, username: str) -> int:
 
 
 def modify_user(auth_file_str: str, username: str) -> int:
-    """Modifies an existing user's password."""
+    """
+    Modifies an existing user's password in the specified digest file.
+
+    Args:
+        auth_file_str (str): The path to the authentication file.
+        username (str): The username to modify.
+
+    Returns:
+        int: 0 if the password was modified successfully, 1 if an error occurred.
+    """
     auth_path = Path(auth_file_str)
     if not auth_path.is_file():
         print(
@@ -147,7 +192,16 @@ def modify_user(auth_file_str: str, username: str) -> int:
 
 
 def delete_user(auth_file_str: str, username: str) -> int:
-    """Deletes a user from the specified digest file."""
+    """
+    Deletes a user from the specified digest file.
+
+    Args:
+        auth_file_str (str): The path to the authentication file.
+        username (str): The username to delete.
+
+    Returns:
+        int: 0 if the user was deleted successfully, 1 if an error occurred.
+    """
     auth_path = Path(auth_file_str)
     if not auth_path.is_file():
         print(

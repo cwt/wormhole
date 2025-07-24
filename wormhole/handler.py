@@ -23,16 +23,20 @@ async def relay_stream(
     verbose: int = 0,
 ) -> bytes | None:
     """
-    Relays data between a reader and a writer stream until EOF.
+    Relays data from a reader to a writer.
+
+    Reads from the reader until the end of the stream is reached and writes
+    the data to the writer. Handles any exceptions that may occur during the process.
 
     Args:
-        reader: The stream to read data from.
-        writer: The stream to write data to.
-        ident: A dictionary with 'id' and 'client' for logging.
-        return_first_line: If True, captures and returns the first line.
+        reader (asyncio.StreamReader): The reader to read data from.
+        writer (asyncio.StreamWriter): The writer to write data to.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        return_first_line (bool, optional): Whether to return the first line of data. Defaults to False.
+        verbose (int, optional): Verbosity level. Defaults to 0.
 
     Returns:
-        The first line of the stream as bytes if requested, otherwise None.
+        bytes: The first line of data if return_first_line is True, otherwise None.
     """
     first_line: bytes | None = None
     try:
@@ -66,9 +70,20 @@ async def _resolve_and_validate_host(
     host: str, ident: dict[str, str], allow_private: bool, verbose: int = 0
 ) -> list[str]:
     """
-    Resolves a hostname to a list of IPs, validates them, and caches the list.
+    Resolves a hostname to a list of valid IPs, prioritizes IPv6, caches the results,
+    and handles DNS load balancing.
+
     Uses aiodns via a custom resolver that respects the local hosts file.
-    Supports DNS load balancing and prioritizes IPv6 if available.
+
+    Args:
+        host (str): The hostname to resolve.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        allow_private (bool): Whether to allow private IP addresses.
+        verbose (int, optional): Verbosity level (default is 0).
+
+    Returns:
+        list[str]: A list of valid IP addresses.
+
     Raises:
         PermissionError: If the host is an ad domain or resolves to only private IPs.
         OSError: If the host cannot be resolved.
@@ -162,8 +177,17 @@ async def _create_fastest_connection(
     verbose: int = 0,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """
-    Implements a robust "Happy Eyeballs" connection algorithm with retries.
-    It wraps the concurrent connection logic in a retry loop.
+    Helper function to create the fastest connection to the target server.
+
+    Args:
+        ip_list (list[str]): List of IP addresses to try.
+        port (int): Port number to connect to.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        max_attempts (int, optional): Maximum number of attempts. Defaults to 3.
+        verbose (int, optional): Verbosity level. Defaults to 0.
+
+    Returns:
+        tuple[asyncio.StreamReader, asyncio.StreamWriter]: Reader and writer for the server connection.
     """
     last_error = None
 
@@ -256,7 +280,26 @@ async def process_https_tunnel(
     max_attempts: int = 3,
     verbose: int = 0,
 ) -> None:
-    """Establishes an HTTPS tunnel and relays data between client and server."""
+    """
+    Establishes an HTTPS tunnel between client and server.
+
+    Reads the client's initial request, resolves the host, establishes a connection,
+    and relays data between the client and server in both directions. Handles
+    exceptions and logs the outcome.
+
+    Args:
+        client_reader (asyncio.StreamReader): The client's input stream.
+        client_writer (asyncio.StreamWriter): The client's output stream.
+        method (str): The HTTP method used in the request.
+        uri (str): The URI of the request.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        allow_private (bool): Whether to allow private IP addresses.
+        max_attempts (int, optional): Maximum number of attempts to establish a connection. Defaults to 3.
+        verbose (int, optional): Verbosity level for logging. Defaults to 0.
+
+    Returns:
+        None
+    """
     host, port = get_host_and_port(uri)
     server_reader = None
     server_writer = None
@@ -324,7 +367,24 @@ async def _send_http_request(
     max_attempts: int = 3,
     verbose: int = 0,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """Helper function to connect and send an HTTP request."""
+    """
+    Helper function to connect and send an HTTP request.
+
+    Args:
+        ip_list (list[str]): List of IP addresses to try.
+        port (int): Port number to connect to.
+        method (str): HTTP method (e.g., GET, POST).
+        path (str): Request path.
+        version (str): HTTP version (e.g., HTTP/1.0, HTTP/1.1).
+        headers (list[str]): List of HTTP headers.
+        payload (bytes): Request payload.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        max_attempts (int, optional): Maximum number of attempts to connect. Defaults to 3.
+        verbose (int, optional): Verbosity level. Defaults to 0.
+
+    Returns:
+        tuple[asyncio.StreamReader, asyncio.StreamWriter]: A tuple of server reader and writer.
+    """
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
     server_reader, server_writer = await _create_fastest_connection(
@@ -351,7 +411,26 @@ async def process_http_request(
     max_attempts: int = 3,
     verbose: int = 0,
 ) -> None:
-    """Processes a standard HTTP request by forwarding it to the target server."""
+    """
+    Process an HTTP request by forwarding it to a target server and relaying
+    the response back to the client, handling retries if necessary and upgrading
+    the request to HTTP/1.1 if it's HTTP/1.0.
+
+    Args:
+        client_writer (asyncio.StreamWriter): The writer for the client connection.
+        method (str): The HTTP method (e.g., GET, POST).
+        uri (str): The request URI.
+        version (str): The HTTP version.
+        headers (list[str]): The list of HTTP headers.
+        payload (bytes): The request payload.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        allow_private (bool): Flag to allow private IP addresses.
+        max_attempts (int, optional): Maximum number of attempts to connect. Defaults to 3.
+        verbose (int, optional): Verbosity level. Defaults to 0.
+
+    Returns:
+        None
+    """
     server_reader = None
     server_writer = None
 
@@ -540,13 +619,20 @@ async def parse_request(
     client_reader: asyncio.StreamReader, ident: dict[str, str], verbose: int = 0
 ) -> tuple[str, list[str], bytes] | tuple[None, None, None]:
     """
-    Parses the initial request from the client.
+    Parse an HTTP request from the client.
 
-    Reads from the client stream to get the request line, headers, and payload.
-    Includes a simple retry mechanism for slow or incomplete initial reads.
+    Reads the request line and headers from the client, and optionally
+    reads the payload if Content-Length is specified.
+
+    Args:
+        client_reader (asyncio.StreamReader): The reader for the client connection.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        verbose (int, optional): The verbosity level for logging. Defaults to 0.
 
     Returns:
-        A tuple of (request_line, headers, payload) or (None, None, None) on failure.
+        tuple[str, list[str], bytes] | tuple[None, None, None]:
+        A tuple containing the request line, headers, and payload,
+        or None if parsing fails.
     """
     try:
         # Read headers until the double CRLF, with a timeout to prevent hanging.

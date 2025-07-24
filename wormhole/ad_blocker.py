@@ -24,7 +24,21 @@ DOMAIN_REGEX = re.compile(
 
 
 async def _fetch_list(session: aiohttp.ClientSession, url: str) -> str:
-    """Fetches the content of a single blocklist URL with a retry mechanism."""
+    """
+    Fetches the content of a single blocklist URL with a retry mechanism.
+
+    Args:
+        session (aiohttp.ClientSession): The session object to make the HTTP request.
+        url (str): The URL of the blocklist to fetch.
+
+    Returns:
+        str: The content of the fetched blocklist, or an empty string if fetching failed.
+
+    Raises:
+        asyncio.TimeoutError: If the request times out.
+        Exception: If an unexpected error occurs during the request.
+    """
+
     max_retries: int = 3
     timeout = aiohttp.ClientTimeout(total=15)  # seconds
     for attempt in range(max_retries):
@@ -54,7 +68,15 @@ async def _fetch_list(session: aiohttp.ClientSession, url: str) -> str:
 
 
 def _parse_domains_from_content(content: str) -> set[str]:
-    """Parses a block of text and extracts all valid domains."""
+    """
+    Parses a block of text and extracts all valid domains.
+
+    Args:
+        content (str): The block of text to parse.
+
+    Returns:
+        set[str]: A set of valid domain names extracted from the content.
+    """
     domains: set[str] = set()
     for line in content.splitlines():
         line = line.strip()
@@ -76,7 +98,16 @@ def _parse_domains_from_content(content: str) -> set[str]:
 def _filter_redundant_domains(domains: set[str]) -> set[str]:
     """
     Optimizes a set of domains by removing redundant subdomains.
-    e.g., if 'example.com' is present, 'ad.example.com' is removed.
+
+    This function iterates through the set of domains, removing any that are
+    subdomains of a longer domain already present in the set. It ensures that only
+    top-level domains are kept, effectively optimizing the blocklist for ad-blocking.
+
+    Args:
+        domains (set[str]): A set of domain names to be optimized.
+
+    Returns:
+        set[str]: A set of optimized domain names with redundant subdomains removed.
     """
     # Sort by length descending to ensure we process subdomains before parents
     sorted_domains: list[str] = sorted(list(domains), key=len, reverse=True)
@@ -99,9 +130,18 @@ async def update_database(
     db_path_str: str, allowlist_path_str: str | None
 ) -> None:
     """
-    Fetches all public blocklists, filters them against an allowlist,
-    optimizes them, and compiles them into a SQLite database.
+    Update the ad-block database with the latest blocklist data, applying an allowlist
+    and optimizing redundant domains.
+
+    Args:
+        db_path_str (str): Path to the SQLite database file.
+        allowlist_path_str (str | None): Path to a custom allowlist file,
+                                         or None for the default allowlist.
+
+    Returns:
+        None
     """
+
     db_path = Path(db_path_str)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 

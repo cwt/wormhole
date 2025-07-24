@@ -35,19 +35,40 @@ class Resolver:
             Resolver._instance = self
 
     def initialize(self, verbose: int) -> None:
-        """Initializes the resolver with a verbosity level and loads the hosts file."""
+        """
+        Initializes the resolver with a verbosity level and loads the hosts file.
+
+        Args:
+            verbose (int): The verbosity level for logging.
+
+        Returns:
+            None
+        """
         self.verbose = verbose
         self._load_hosts_file()
 
     @staticmethod
     def get_instance() -> "Resolver":
-        """Static access method to get the singleton instance."""
+        """
+        Static access method to get the singleton instance of the resolver.
+
+        Returns:
+            Resolver: The singleton instance of the resolver.
+        """
         if Resolver._instance is None:
             Resolver()
         return Resolver._instance  # type: ignore
 
     def _get_hosts_path(self) -> Path:
-        """Determines the correct path to the hosts file based on the OS."""
+        """
+        Determines the correct path to the hosts file based on the operating system.
+
+        This method returns the path to the hosts file, which is used by the resolver to
+        fetch DNS mappings from the local hosts file.
+
+        Returns:
+            Path: The path to the hosts file.
+        """
         if sys.platform == "win32":
             # Use the SYSTEMROOT environment variable on Windows
             return (
@@ -62,7 +83,16 @@ class Resolver:
             return Path("/etc/hosts")
 
     def _load_hosts_file(self) -> None:
-        """Parses the system's hosts file and populates the cache."""
+        """
+        Parses the system's hosts file and populates the cache.
+
+        This method reads the hosts file, which maps hostnames to IP addresses, and
+        populates the internal cache with this information. The cache is used to quickly
+        resolve hostnames without querying DNS.
+
+        Returns:
+            None
+        """
         hosts_path = self._get_hosts_path()
         ident = {"id": "000000", "client": "0.0.0.0"}
 
@@ -112,6 +142,15 @@ class Resolver:
 
         1. Checks the local hosts file cache first.
         2. If not found, queries DNS for A and AAAA records using aiodns.
+
+        Args:
+            hostname (str): The hostname to resolve.
+
+        Returns:
+            list[str]: A list of IP addresses associated with the hostname.
+
+        Raises:
+            OSError: If no IP addresses could be resolved.
         """
         # Create a specific ident for this resolution request
         ident = {"id": "resolver", "client": hostname}

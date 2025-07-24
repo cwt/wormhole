@@ -14,7 +14,7 @@ from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
 from .version import VERSION
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from types import ModuleType
 import asyncio
@@ -30,8 +30,16 @@ except ImportError:
     pass  # uvloop or winloop is an optional for speedup, not a requirement
 
 
-async def main_async(args) -> None:
-    """The main asynchronous function to run the server."""
+async def main_async(args: Namespace) -> None:
+    """
+    Asynchronously starts and runs the Wormhole server with the provided arguments.
+
+    Args:
+        args (Namespace): The parsed command-line arguments.
+
+    Returns:
+        None
+    """
     if uvloop:
         logger.info(
             flm(
@@ -138,7 +146,17 @@ async def main_async(args) -> None:
 
 
 def main() -> int:
-    """Parses command-line arguments and starts the event loop."""
+    """
+    Parses command-line arguments and starts the event loop.
+
+    This function handles the main execution flow of the Wormhole proxy server.
+    It parses command-line arguments, sets up logging, and initializes the server.
+    If the server is not in update mode, it runs the main server loop asynchronously.
+    If in update mode, it updates the ad-block database and exits.
+
+    Returns:
+        int: The exit code of the script.
+    """
     parser = ArgumentParser(
         description=f"Wormhole ({VERSION}): Asynchronous I/O HTTP/S Proxy"
     )

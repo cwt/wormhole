@@ -9,7 +9,14 @@ class LogThrottler:
     """A class to throttle and summarize repeated log messages."""
 
     def __init__(self, logger, level: str, delay: float = 5.0):
-        """Initializes the log throttler with a level name and delay."""
+        """
+        Initializes the log throttler with a logger instance, log level, and delay.
+
+        Args:
+            logger (logger): The logger instance to use.
+            level (str): The log level name (e.g., 'error').
+            delay (float): The delay time in seconds before logging a repeated message summary.
+        """
         self.logger = logger
         self.level = level.upper()  # Store the level name, e.g., "ERROR"
         self.delay = delay
@@ -18,7 +25,15 @@ class LogThrottler:
         self.timer: asyncio.TimerHandle | None = None
 
     def _flush_summary(self, **kwargs):
-        """Prints the summary of how many times the last message was repeated."""
+        """
+        Prints the summary of how many times the last message was repeated.
+
+        This method is responsible for logging the summary of repeated messages to the
+        logger. It checks the repeat count and logs the appropriate message format.
+
+        Args:
+            **kwargs: Additional keyword arguments to be passed to the logger.
+        """
         if self.repeat_count > 2:
             self.logger.opt(depth=2).log(
                 self.level,
@@ -38,7 +53,18 @@ class LogThrottler:
         self.repeat_count = 0
 
     def process(self, message: str, **kwargs):
-        """Processes a log message, either logging it or incrementing a repeat counter."""
+        """
+        Processes a log message, either logging it or incrementing a repeat counter.
+
+        This method checks if the current message is the same as the last one. If it is,
+        it increments the repeat counter. If it's a new message, it logs the message
+        immediately and resets the repeat counter. If the message has been repeated multiple
+        times, it schedules a delayed summary log message.
+
+        Args:
+            message (str): The log message to process.
+            **kwargs: Additional keyword arguments to be passed to the logger.
+        """
         if self.last_message and message != self.last_message:
             if self.timer:
                 self.timer.cancel()
@@ -69,7 +95,13 @@ def setup_logger(
     async_mode: bool = True,
 ) -> None:
     """
-    Configures the global loguru logger instance. This should only be called once.
+    Sets up the global loguru logger instance, configuring sinks based on the provided parameters.
+
+    Args:
+        syslog_host (str | None, optional): The host for the syslog server. Defaults to None.
+        syslog_port (int, optional): The port for the syslog server. Defaults to 514.
+        verbose (int, optional): The verbosity level. Defaults to 0.
+        async_mode (bool, optional): Whether to use async mode. Defaults to True.
     """
     # Remove the default handler to have full control over sinks.
     logger.remove()
@@ -129,12 +161,12 @@ def format_log_message(
     Formats a log message with the given identifier.
 
     Args:
-        message: The log message to format.
-        ident: A dictionary containing identifiers like 'id' and 'client'.
-        verbose: The verbosity level of the logger.
+        message (str): The log message to format.
+        ident (dict[str, str]): A dictionary containing the unique identifier and client details.
+        verbose (int): The verbosity level of the logger.
 
     Returns:
-        A formatted log message string.
+        str: A formatted log message string.
     """
     if verbose > 1:
         return f"[{ident['id']}][{ident['client']}]: {message}"

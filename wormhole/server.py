@@ -37,6 +37,16 @@ async def handle_connection(
 ) -> None:
     """
     Manages a single client connection from start to finish.
+
+    Args:
+        client_reader (asyncio.StreamReader): The reader for the client connection.
+        client_writer (asyncio.StreamWriter): The writer for the client connection.
+        auth_file_path (str | None): Path to the authentication file.
+        verbose (int, optional): Verbosity level of logging. Defaults to 0.
+        allow_private (bool, optional): Whether to allow private connections. Defaults to False.
+
+    Returns:
+        None
     """
     global CURRENT_TASKS
     ident = get_ident(client_reader, client_writer)
@@ -149,6 +159,16 @@ async def start_wormhole_server(
 ) -> asyncio.Server:
     """
     Initializes and starts the main proxy server.
+
+    Args:
+        host (str): The host address to bind the server to.
+        port (int): The port number to bind the server to.
+        auth_file_path (str | None): Path to the authentication file.
+        verbose (int, optional): Verbosity level of logging. Defaults to 0.
+        allow_private (bool, optional): Whether to allow private connections. Defaults to False.
+
+    Returns:
+        asyncio.Server: The server instance.
     """
     # Use functools.partial to pass the auth_file_path and verbose flag to the connection handler.
     connection_handler = functools.partial(

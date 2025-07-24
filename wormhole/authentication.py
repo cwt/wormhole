@@ -18,7 +18,17 @@ def get_ident(
     writer: asyncio.StreamWriter,
     user: str | None = None,
 ) -> dict[str, str]:
-    """Generates a unique identifier dictionary for a client connection."""
+    """
+    Generates a unique identifier dictionary for a client connection.
+
+    Args:
+        reader: asyncio.StreamReader, The reader stream for the connection.
+        writer: asyncio.StreamWriter, The writer stream for the connection.
+        user (str | None): The username, if available.
+
+    Returns:
+        dict[str, str]: A dictionary containing the unique identifier and client details.
+    """
     peername = writer.get_extra_info("peername")
     client_ip = peername[0] if peername else "unknown"
     client_id = f"{user}@{client_ip}" if user else client_ip
@@ -26,7 +36,15 @@ def get_ident(
 
 
 def _load_auth_file(path: Path) -> dict | None:
-    """Loads and caches the auth file if it has been modified."""
+    """
+    Loads and caches the authentication file if it has been modified.
+
+    Args:
+        path (Path): The path to the authentication file.
+
+    Returns:
+        dict | None: A dictionary of user credentials if the file is successfully loaded, None otherwise.
+    """
     global _auth_file_cache, _auth_file_mtime
     try:
         current_mtime = path.stat().st_mtime
@@ -51,14 +69,27 @@ QUOTE_UNQUOTE_RE = re.compile(r'(\w+)=(?:"([^"]*)"|([^\s,]*))')
 
 
 def _parse_digest_header(header_value: str) -> dict[str, str]:
-    """Parses the Digest authentication header into a dictionary."""
+    """
+    Parses the Digest authentication header into a dictionary.
+
+    Args:
+        header_value (str): The Digest authentication header value.
+
+    Returns:
+        dict[str, str]: A dictionary containing the parsed parameters of the Digest header.
+    """
     parts = QUOTE_UNQUOTE_RE.findall(header_value)
     # The regex produces tuples like ('key', 'quoted_val', ''), so we merge
     return {key: val1 or val2 for key, val1, val2 in parts}
 
 
 async def send_auth_required_response(writer: asyncio.StreamWriter) -> None:
-    """Sends a 407 Proxy Authentication Required with a new SHA-256 Digest challenge."""
+    """
+    Sends a 407 Proxy Authentication Required with a new SHA-256 Digest challenge.
+
+    Args:
+        writer: asyncio.StreamWriter, The writer stream for the connection.
+    """
     nonce = secrets.token_hex(16)
     opaque = secrets.token_hex(16)
     # qop="auth" means quality of protection is authentication.
@@ -86,7 +117,19 @@ async def verify_credentials(
     headers: list[str],
     auth_file_path: str,
 ) -> dict[str, str] | None:
-    """Verifies credentials using manual Digest SHA-256 validation."""
+    """
+    Verifies credentials using manual Digest SHA-256 validation.
+
+    Args:
+        reader: asyncio.StreamReader, The reader stream for the connection.
+        writer: asyncio.StreamWriter, The writer stream for the connection.
+        method: str, The HTTP method (e.g., 'CONNECT').
+        headers: list[str], The HTTP headers list.
+        auth_file_path: str, The path to the authentication file.
+
+    Returns:
+        dict[str, str] | None: A dictionary containing user information if credentials are valid, None otherwise.
+    """
     auth_header_full = next(
         (h for h in headers if h.lower().startswith("proxy-authorization:")),
         None,
@@ -116,7 +159,6 @@ async def verify_credentials(
         ha1 = user_data["hash"]
 
         # 4. Calculate HA2 on the server using the URI *from the auth header*
-        # --- THIS IS THE FIX ---
         ha2_data = f"{method}:{params['uri']}".encode("utf-8")
         ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
 

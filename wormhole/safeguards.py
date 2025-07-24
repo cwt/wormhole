@@ -35,10 +35,15 @@ ALLOW_LIST_SET: set[str] = DEFAULT_ALLOWLIST.copy()
 @lru_cache(maxsize=1)
 def has_public_ipv6() -> bool:
     """
-    Checks if the current machine has a public, routable IPv6 address by
-    attempting to connect a UDP socket to a public IPv6 DNS server.
-    The result is cached to avoid repeated lookups.
+    Checks if the current machine has a public, routable IPv6 address.
+
+    This function attempts to connect a UDP socket to a public IPv6 DNS server to determine
+    IPv6 connectivity. The result is cached to avoid repeated lookups.
+
+    Returns:
+        bool: True if a public, routable IPv6 address is available, False otherwise.
     """
+
     s = None
     try:
         # Create a UDP socket for IPv6
@@ -72,10 +77,10 @@ def is_private_ip(ip_str: str) -> bool:
     internal network resources (SSRF attacks).
 
     Args:
-        ip_str: The IP address to check.
+        ip_str (str): The IP address to check.
 
     Returns:
-        True if the IP address is private/reserved, False otherwise.
+        bool: True if the IP address is private/reserved, False otherwise.
     """
     try:
         ip_obj = ipaddress.ip_address(ip_str)
@@ -90,15 +95,16 @@ async def load_ad_block_db(
     path: str, host: str, ident: dict[str, str], verbose: int = 0
 ) -> int:
     """
-    Loads a list of domains to block from a SQLite database into a global set
-    for fast in-memory access.
+    Asynchronously loads a list of domains to block from a SQLite database into a global set for fast in-memory access.
 
     Args:
-        path: The path to the SQLite database file.
-        host: The host IP of the server, used for logging.
+        path (str): The path to the SQLite database file.
+        host (str): The host IP of the server, used for logging.
+        ident (dict[str, str]): An identification dictionary for logging.
+        verbose (int, optional): Verbosity level for logging. Defaults to 0.
 
     Returns:
-        The number of unique domains loaded into the blocklist.
+        int: The number of unique domains loaded into the blocklist.
     """
     try:
         async with aiosqlite.connect(f"file:{path}?mode=ro", uri=True) as db:
@@ -137,6 +143,15 @@ def load_allowlist(
 ) -> int:
     """
     Loads domains from a user-provided file and adds them to the global allowlist set.
+
+    Args:
+        path (str): The path to the file containing the allowlist domains.
+        host (str): The host IP of the server, used for logging.
+        ident (dict[str, str]): An identification dictionary for logging.
+        verbose (int, optional): Verbosity level for logging. Defaults to 0.
+
+    Returns:
+        int: The number of unique domains loaded into the allowlist.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -164,6 +179,12 @@ def is_ad_domain(hostname: str) -> bool:
     2. Exact match in allowlist -> Allow
     3. Parent domain in blocklist -> Block
     4. Parent domain in allowlist -> Allow
+
+    Args:
+        hostname (str): The hostname to check.
+
+    Returns:
+        bool: True if the hostname is blocked, False otherwise.
     """
     hostname_lower = hostname.lower()
 
