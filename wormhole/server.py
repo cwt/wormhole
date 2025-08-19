@@ -182,8 +182,10 @@ async def start_wormhole_server(
         # Determine address family for IPv4/IPv6.
         family = socket.AF_INET6 if ":" in host else socket.AF_INET
 
+        # Increase the buffer limit to handle large HTTP headers
+        # Default is 2^16 (64KB), we're increasing it to 2^18 (256KB)
         server = await asyncio.start_server(
-            connection_handler, host, port, family=family, limit=MAX_TASKS
+            connection_handler, host, port, family=family, limit=262144
         )
 
         # Log the addresses the server is listening on.
