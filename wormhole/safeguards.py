@@ -9,6 +9,7 @@ import sys
 DEFAULT_ALLOWLIST: set[str] = {
     "bit.ly",  # Bitly for URL shortening
     "azurewebsites.net",  # Azure Web App
+    "studiostaticassetsprod.azureedge.net",  # Azure CDN for static files
     "s3.amazonaws.com",  # Amazon S3 for static assets"
     "fonts.googleapis.com",  # Google Fonts
     "safebrowsing.googleapis.com",  # Google Safe Browsing for security
@@ -23,8 +24,9 @@ DEFAULT_ALLOWLIST: set[str] = {
     "esm.run",  # jsDelivr for JavaScript modules
     "unpkg.com",  # Unpkg CDN
     "bing.com",  # Bing for search functionality
+    "t.co",  # Twitter domain shortening
     "twitter.com",  # Twitter for social media integration
-    "x.com",  # X (formerly Twitter) for social media integration"
+    "x.com",  # X (formerly Twitter) for social media integration
 }
 
 # The runtime sets are initialized. The allowlist starts with the defaults.
