@@ -82,8 +82,13 @@ class LogThrottler:
         if self.timer:
             self.timer.cancel()
 
-        loop = asyncio.get_running_loop()
-        self.timer = loop.call_later(self.delay, self._flush_summary)
+        try:
+            loop = asyncio.get_running_loop()
+            self.timer = loop.call_later(self.delay, self._flush_summary)
+        except RuntimeError:
+            # If there's no running event loop, log the message directly
+            # This can happen in synchronous test cases
+            self._flush_summary()
 
 
 # In loguru, the logger is imported and ready to be configured.
