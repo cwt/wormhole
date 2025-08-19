@@ -1,6 +1,7 @@
 from .authentication import get_ident, verify_credentials
 from .handler import process_http_request, process_https_tunnel, parse_request
 from .logger import logger, format_log_message as flm
+from .context import RequestContext
 from time import time
 import asyncio
 import functools
@@ -52,25 +53,36 @@ async def handle_connection(
     ident = get_ident(client_reader, client_writer)
     start_time = time()
 
+    # Create a request context to reduce parameter passing
+    context = RequestContext(ident, verbose)
+
     CURRENT_TASKS += 1
-    if verbose > 0:
+    if context.verbose > 0:
         logger.debug(
-            flm(f"{CURRENT_TASKS}/{MAX_TASKS} Tasks active", ident, verbose)
+            flm(
+                f"{CURRENT_TASKS}/{MAX_TASKS} Tasks active",
+                context.ident,
+                context.verbose,
+            )
         )
     else:
-        logger.debug(flm("Connection started.", ident, verbose))
+        logger.debug(flm("Connection started.", context.ident, context.verbose))
 
     try:
         # Parse the initial request from the client.
         request_line, headers, payload = await parse_request(
-            client_reader, ident, verbose
+            client_reader, context
         )
         # If parse_request fails, it returns (None, None, None). We check all three
         # to explicitly narrow the types for mypy, which can't infer that if one
         # is None, they all are.
         if not request_line or headers is None or payload is None:
             logger.debug(
-                flm("Empty request, closing connection.", ident, verbose)
+                flm(
+                    "Empty request, closing connection.",
+                    context.ident,
+                    context.verbose,
+                )
             )
             return
 
@@ -81,8 +93,8 @@ async def handle_connection(
             logger.debug(
                 flm(
                     f"Malformed request line '{request_line}', closing.",
-                    ident,
-                    verbose,
+                    context.ident,
+                    context.verbose,
                 )
             )
             return
@@ -101,12 +113,14 @@ async def handle_connection(
                 logger.info(
                     flm(
                         f"{method} 407 {uri} (Authentication Failed)",
-                        ident,
-                        verbose,
+                        context.ident,
+                        context.verbose,
                     )
                 )
                 return
             ident = user_ident  # Update ident with authenticated user info.
+            # Update context with authenticated user info
+            context.ident = ident
         # --- Request Dispatching ---
         if method.upper() == "CONNECT":
             await process_https_tunnel(
@@ -114,10 +128,10 @@ async def handle_connection(
                 client_writer,
                 method,
                 uri,
-                ident,
+                context.ident,
                 allow_private,
                 max_attempts=MAX_RETRY,
-                verbose=verbose,
+                verbose=context.verbose,
             )
         else:
             # The check above ensures `headers` is `list[str]` and `payload` is `bytes`.
@@ -128,15 +142,19 @@ async def handle_connection(
                 version,
                 headers,
                 payload,
-                ident,
+                context.ident,
                 allow_private,
                 max_attempts=MAX_RETRY,
-                verbose=verbose,
+                verbose=context.verbose,
             )
 
     except Exception as e:
         logger.error(
-            flm(f"Unhandled error in connection handler: {e}", ident, verbose),
+            flm(
+                f"Unhandled error in connection handler: {e}",
+                context.ident,
+                context.verbose,
+            ),
             exc_info=True,
         )
     finally:
@@ -146,7 +164,11 @@ async def handle_connection(
             await client_writer.wait_closed()
         duration = time() - start_time
         logger.debug(
-            flm(f"Connection closed ({duration:.5f} seconds).", ident, verbose)
+            flm(
+                f"Connection closed ({duration:.5f} seconds).",
+                context.ident,
+                context.verbose,
+            )
         )
 
 

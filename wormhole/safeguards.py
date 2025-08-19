@@ -1,3 +1,4 @@
+from .context import RequestContext
 from .logger import logger, format_log_message as flm
 from functools import lru_cache
 import aiosqlite
@@ -94,7 +95,7 @@ def is_private_ip(ip_str: str) -> bool:
 
 
 async def load_ad_block_db(
-    path: str, host: str, ident: dict[str, str], verbose: int = 0
+    path: str, host: str, context: RequestContext
 ) -> int:
     """
     Asynchronously loads a list of domains to block from a SQLite database into a global set for fast in-memory access.
@@ -102,8 +103,7 @@ async def load_ad_block_db(
     Args:
         path (str): The path to the SQLite database file.
         host (str): The host IP of the server, used for logging.
-        ident (dict[str, str]): An identification dictionary for logging.
-        verbose (int, optional): Verbosity level for logging. Defaults to 0.
+        context (RequestContext): The request context containing ident and verbose level.
 
     Returns:
         int: The number of unique domains loaded into the blocklist.
@@ -119,8 +119,8 @@ async def load_ad_block_db(
         logger.error(
             flm(
                 f"Could not load ad-block database from '{path}': {e}",
-                ident=ident,
-                verbose=verbose,
+                context.ident,
+                context.verbose,
             )
         )
 
@@ -132,25 +132,22 @@ async def load_ad_block_db(
         logger.debug(
             flm(
                 f"Ad-block set memory usage: ~{total_size_mb:.2f} MB for {len(AD_BLOCK_SET)} domains",
-                ident=ident,
-                verbose=verbose,
+                context.ident,
+                context.verbose,
             )
         )
 
     return len(AD_BLOCK_SET)
 
 
-def load_allowlist(
-    path: str, host: str, ident: dict[str, str], verbose: int = 0
-) -> int:
+def load_allowlist(path: str, host: str, context: RequestContext) -> int:
     """
     Loads domains from a user-provided file and adds them to the global allowlist set.
 
     Args:
         path (str): The path to the file containing the allowlist domains.
         host (str): The host IP of the server, used for logging.
-        ident (dict[str, str]): An identification dictionary for logging.
-        verbose (int, optional): Verbosity level for logging. Defaults to 0.
+        context (RequestContext): The request context containing ident and verbose level.
 
     Returns:
         int: The number of unique domains loaded into the allowlist.
@@ -164,8 +161,8 @@ def load_allowlist(
         logger.error(
             flm(
                 f"Allowlist file not found at '{path}'",
-                ident=ident,
-                verbose=verbose,
+                context.ident,
+                context.verbose,
             )
         )
     return len(ALLOW_LIST_SET)

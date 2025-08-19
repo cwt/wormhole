@@ -9,6 +9,7 @@ if sys.version_info < (3, 11):
 
 from .ad_blocker import update_database
 from .auth_manager import add_user, modify_user, delete_user
+from .context import RequestContext
 from .logger import logger, setup_logger, format_log_message as flm
 from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist
@@ -61,34 +62,40 @@ async def main_async(args: Namespace) -> None:
     resolver.initialize(verbose=args.verbose)
 
     if args.allowlist:
+        # Create a context for the allowlist loading
+        context = RequestContext(
+            ident={"id": "000000", "client": args.host}, verbose=args.verbose
+        )
         num_allowed = load_allowlist(
             args.allowlist,
             args.host,
-            ident={"id": "000000", "client": args.host},
-            verbose=args.verbose,
+            context,
         )
         if num_allowed > 0:
             logger.info(
                 flm(
                     f"Loaded custom allowlist. Total allowlist size: {num_allowed} domains.",
-                    ident={"id": "000000", "client": args.host},
-                    verbose=args.verbose,
+                    context.ident,
+                    context.verbose,
                 )
             )
 
     if args.ad_block_db:
+        # Create a context for the ad-block database loading
+        context = RequestContext(
+            ident={"id": "000000", "client": args.host}, verbose=args.verbose
+        )
         num_blocked = await load_ad_block_db(
             args.ad_block_db,
             args.host,
-            ident={"id": "000000", "client": args.host},
-            verbose=args.verbose,
+            context,
         )
         if num_blocked > 0:
             logger.info(
                 flm(
                     f"Ad-blocker enabled with {num_blocked} domains from database.",
-                    ident={"id": "000000", "client": args.host},
-                    verbose=args.verbose,
+                    context.ident,
+                    context.verbose,
                 )
             )
 
