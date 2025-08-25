@@ -27,11 +27,14 @@ class TestResolveAndValidateHost:
 
         # Mock the is_ad_domain function to return False
         with patch("wormhole.handler.is_ad_domain", return_value=False):
-            # Mock the resolver to return a valid IP
+            # Mock the resolver to return a valid IP and TTL
             with patch("wormhole.handler.resolver") as mock_resolver:
-                mock_resolver.resolve = AsyncMock(
-                    return_value=["93.184.216.34"]
-                )  # example.com
+                mock_resolver.resolve_with_ttl = AsyncMock(
+                    return_value=(
+                        ["93.184.216.34"],
+                        300,
+                    )  # example.com with 300s TTL
+                )
 
                 # Mock is_private_ip to return False for the IP
                 with patch(

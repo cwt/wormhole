@@ -9,8 +9,9 @@ import random
 import time
 
 # --- DNS Cache for Performance ---
-DNS_CACHE: dict[str, tuple[list[str], float]] = {}
-DNS_CACHE_TTL: int = 300  # Cache DNS results for 5 minutes
+DNS_CACHE: dict[str, tuple[list[str], float, float]] = (
+    {}
+)  # (ip_list, timestamp, ttl_expiration)
 
 
 # --- Modernized Relay Stream Function ---
@@ -96,8 +97,8 @@ async def _resolve_and_validate_host(
 
     # Check cache first
     if host in DNS_CACHE:
-        ip_list, timestamp = DNS_CACHE[host]
-        if time.time() - timestamp < DNS_CACHE_TTL:
+        ip_list, timestamp, ttl_expiration = DNS_CACHE[host]
+        if time.time() < ttl_expiration:
             logger.debug(
                 flm(
                     f"DNS cache hit for '{host}'. ({len(DNS_CACHE)} hosts cached)",
@@ -107,9 +108,9 @@ async def _resolve_and_validate_host(
             )
             return ip_list
 
-    # Resolve hostname using aiodns resolver
+    # Resolve hostname using aiodns resolver with TTL information
     try:
-        resolved_ips = await resolver.resolve(host)
+        resolved_ips, min_ttl = await resolver.resolve_with_ttl(host)
     except OSError as e:
         raise OSError(f"Failed to resolve host: {host}") from e
 
@@ -154,13 +155,14 @@ async def _resolve_and_validate_host(
             f"Blocked access to '{host}' as it resolved to only private/reserved IPs."
         )
 
-    # Update cache
-    DNS_CACHE[host] = (final_ip_list, time.time())
+    # Update cache with TTL-based expiration
+    ttl_expiration = time.time() + min_ttl
+    DNS_CACHE[host] = (final_ip_list, time.time(), ttl_expiration)
     logger.debug(
         flm(
             (
                 f"DNS cache miss for '{host}'. "
-                f"Resolved to {final_ip_list}. Caching. "
+                f"Resolved to {final_ip_list} with TTL {min_ttl}s. Caching until {ttl_expiration}. "
                 f"({len(DNS_CACHE)} hosts cached)"
             ),
             context.ident,

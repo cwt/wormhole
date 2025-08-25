@@ -137,18 +137,18 @@ class Resolver:
                 )
             )
 
-    async def resolve(self, hostname: str) -> list[str]:
+    async def resolve_with_ttl(self, hostname: str) -> tuple[list[str], int]:
         """
-        Resolves a hostname to a list of IP addresses.
+        Resolves a hostname to a list of IP addresses and the minimum TTL.
 
         1. Checks the local hosts file cache first.
-        2. If not found, queries DNS for A and AAAA records using aiodns.
+        2. If not found, queries DNS for A and AAAA records using aiodns and extracts TTL.
 
         Args:
             hostname (str): The hostname to resolve.
 
         Returns:
-            list[str]: A list of IP addresses associated with the hostname.
+            tuple[list[str], int]: A list of IP addresses and the minimum TTL value.
 
         Raises:
             OSError: If no IP addresses could be resolved.
@@ -171,7 +171,8 @@ class Resolver:
                     self.verbose,
                 )
             )
-            return [ip]
+            # Hosts file entries don't have TTL, use a default high value
+            return [ip], 3600
 
         # 2. Query DNS using aiodns for IPv4 and IPv6 addresses concurrently
         results = await asyncio.gather(
@@ -181,6 +182,8 @@ class Resolver:
         )
 
         resolved_ips: set[str] = set()
+        min_ttl = float("inf")
+
         for res in results:
             if isinstance(res, list):
                 for record in res:
@@ -188,6 +191,9 @@ class Resolver:
                         resolved_ips.add(record.host.decode())
                     else:
                         resolved_ips.add(record.host)
+                    # Extract TTL from record
+                    if hasattr(record, "ttl") and record.ttl < min_ttl:
+                        min_ttl = record.ttl
             elif isinstance(res, aiodns.error.DNSError):
                 # Ignore common "not found" errors. Log other DNS errors for debugging.
                 if res.args[0] not in (
@@ -209,7 +215,30 @@ class Resolver:
         if not resolved_ips:
             raise OSError(f"Failed to resolve host: {hostname}")
 
-        return list(resolved_ips)
+        # If no TTL was found (shouldn't happen but just in case), use default
+        if min_ttl == float("inf"):
+            min_ttl = 300
+
+        return list(resolved_ips), int(min_ttl)
+
+    async def resolve(self, hostname: str) -> list[str]:
+        """
+        Resolves a hostname to a list of IP addresses.
+
+        1. Checks the local hosts file cache first.
+        2. If not found, queries DNS for A and AAAA records using aiodns.
+
+        Args:
+            hostname (str): The hostname to resolve.
+
+        Returns:
+            list[str]: A list of IP addresses associated with the hostname.
+
+        Raises:
+            OSError: If no IP addresses could be resolved.
+        """
+        ips, _ = await self.resolve_with_ttl(hostname)
+        return ips
 
 
 # Initialize the singleton instance so it's ready for other modules to import

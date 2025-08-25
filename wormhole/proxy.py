@@ -283,7 +283,7 @@ def main() -> int:
 
     # Use the new uvloop.run() approach for Python 3.12+
     # For older versions or if uvloop is not available, we'll use the standard approach
-    if uvloop and hasattr(uvloop, 'run'):
+    if uvloop and hasattr(uvloop, "run"):
         # For Python 3.12+, we'll use uvloop.run() directly when starting the server
         pass  # We'll handle this in the asyncio.run() call
     elif uvloop:
@@ -302,12 +302,16 @@ def main() -> int:
         # For this standalone utility, configure a simple logger to show progress.
         logger.info(f"Updating ad-block database at: {args.update_ad_block_db}")
         try:
-            if uvloop and hasattr(uvloop, 'run'):
+            if uvloop and hasattr(uvloop, "run"):
                 # Use the new uvloop.run() method for Python 3.12+
-                uvloop.run(update_database(args.update_ad_block_db, args.allowlist))
+                uvloop.run(
+                    update_database(args.update_ad_block_db, args.allowlist)
+                )
             else:
                 # Use the standard asyncio.run() for older versions or if uvloop is not available
-                asyncio.run(update_database(args.update_ad_block_db, args.allowlist))
+                asyncio.run(
+                    update_database(args.update_ad_block_db, args.allowlist)
+                )
         except Exception as e:
             logger.error(f"\nAn error occurred during update: {e}")
             return 1
@@ -321,7 +325,7 @@ def main() -> int:
         parser.error(f"Authentication file not found: {args.auth}")
 
     try:
-        if uvloop and hasattr(uvloop, 'run'):
+        if uvloop and hasattr(uvloop, "run"):
             # Use the new uvloop.run() method for Python 3.12+
             uvloop.run(main_async(args))
         else:

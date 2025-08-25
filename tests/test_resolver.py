@@ -111,10 +111,12 @@ class TestResolver:
         mock_dns_resolver = AsyncMock()
         mock_dns_resolver.query = AsyncMock(
             side_effect=[
-                [Mock(host="93.184.216.34")],  # A record
+                [Mock(host="93.184.216.34", ttl=300)],  # A record with TTL
                 [
-                    Mock(host="2606:2800:220:1:248:1893:25c8:1946")
-                ],  # AAAA record
+                    Mock(
+                        host="2606:2800:220:1:248:1893:25c8:1946", ttl=600
+                    )  # AAAA record with TTL
+                ],
             ]
         )
 
