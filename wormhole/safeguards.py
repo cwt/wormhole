@@ -11,11 +11,8 @@ DEFAULT_ALLOWLIST: set[str] = {
     "bit.ly",  # Bitly for URL shortening
     "azurewebsites.net",  # Azure Web App
     "studiostaticassetsprod.azureedge.net",  # Azure CDN for static files
-    "s3.amazonaws.com",  # Amazon S3 for static assets"
-    "fonts.googleapis.com",  # Google Fonts
-    "safebrowsing.googleapis.com",  # Google Safe Browsing for security
-    "jnn-pa.googleapis.com",  # Google Cloud Private Service Connect Endpoint
-    "www.googleapis.com",  # Google APIs (e.g., Maps, reCAPTCHA)
+    "s3.amazonaws.com",  # Amazon S3 for static assets
+    "googleapis.com",  # Google API
     "cdnjs.com",  # Cloudflare CDNJS
     "csp-reporting.cloudflare.com",  # Cloudflare CSP Reporting
     "static.cloudflareinsights.com",  # Cloudflare Web Analytics
