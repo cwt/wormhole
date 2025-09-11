@@ -21,6 +21,7 @@
   - **Allowlist:** You can specify a list of domains that should never be blocked, ensuring that important services are always accessible.
   - **HTTP/1.1 Upgrade:** Automatically attempts to upgrade HTTP/1.0 requests to HTTP/1.1 to leverage modern web features and improve performance.
   - **IPv6 Prioritization:** Prefers IPv6 connections when available for faster and more modern networking.
+  - **Automatic IPv6 Detection:** Automatically detects when IPv6 becomes available and can restart the server to enable dual-stack support.
   - **Security:** Includes safeguards to prevent proxying to private and reserved IP addresses, mitigating the risk of SSRF (Server-Side Request Forgery) attacks.
   - **High Performance:** Built with `asyncio` and can leverage `uvloop` or `winloop` for even better performance. The number of concurrent connections is dynamically adjusted based on system limits.
 
@@ -270,6 +271,25 @@ podman run --rm -it -p 8800:8800 \
 ```
 
 *(Note: You can use docker in place of podman for all examples.)*
+
+-----
+
+## Automatic IPv6 Detection
+
+Wormhole can automatically detect when IPv6 becomes available on your system and restart the server to enable dual-stack support. This is especially useful when moving between networks where IPv6 availability changes.
+
+To enable this feature, use the `--auto-ipv6` flag:
+
+```shell
+wormhole --auto-ipv6
+```
+
+When this flag is enabled, Wormhole will:
+1. Periodically check for IPv6 availability
+2. Automatically restart the server with dual-stack support when IPv6 becomes available
+3. Continue to monitor for network changes
+
+This feature is particularly useful for mobile users who move between networks with different IPv6 support.
 
 -----
 

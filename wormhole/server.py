@@ -178,6 +178,7 @@ async def start_wormhole_server(
     auth_file_path: str | None,
     verbose: int = 0,
     allow_private: bool = False,
+    dual_stack: bool = False,
 ) -> asyncio.Server:
     """
     Initializes and starts the main proxy server.
@@ -188,6 +189,7 @@ async def start_wormhole_server(
         auth_file_path (str | None): Path to the authentication file.
         verbose (int, optional): Verbosity level of logging. Defaults to 0.
         allow_private (bool, optional): Whether to allow private connections. Defaults to False.
+        dual_stack (bool, optional): Whether to attempt dual-stack binding. Defaults to False.
 
     Returns:
         asyncio.Server: The server instance.
@@ -201,6 +203,48 @@ async def start_wormhole_server(
     )
 
     try:
+        if dual_stack and host in ("0.0.0.0", "::"):
+            # Try to create a dual-stack server that listens on both IPv4 and IPv6
+            try:
+                # For dual-stack, we use IPv6 family but with IPV6_V6ONLY disabled
+                server = await asyncio.start_server(
+                    connection_handler,
+                    host,
+                    port,
+                    family=socket.AF_INET6,
+                    flags=socket.AI_PASSIVE,
+                    limit=262144,
+                )
+
+                # Set IPV6_V6ONLY to False for dual-stack support
+                for sock in server.sockets:
+                    if sock.family == socket.AF_INET6:
+                        sock.setsockopt(
+                            socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
+                        )
+
+                # Log the addresses the server is listening on.
+                for s in server.sockets:
+                    addr = s.getsockname()
+                    logger.info(
+                        flm(
+                            f"Wormhole proxy bound and listening at {addr[0]}:{addr[1]}",
+                            ident={"id": "000000", "client": host},
+                            verbose=verbose,
+                        )
+                    )
+
+                return server
+            except Exception as dual_stack_error:
+                logger.warning(
+                    flm(
+                        f"Dual-stack binding failed: {dual_stack_error}. Falling back to single-stack.",
+                        ident={"id": "000000", "client": host},
+                        verbose=verbose,
+                    )
+                )
+                # Fall through to single-stack binding
+
         # Determine address family for IPv4/IPv6.
         family = socket.AF_INET6 if ":" in host else socket.AF_INET
 

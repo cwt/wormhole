@@ -11,6 +11,7 @@ from .ad_blocker import update_database
 from .auth_manager import add_user, modify_user, delete_user
 from .context import RequestContext
 from .logger import logger, setup_logger, format_log_message as flm
+from .network_monitor import monitor_network_changes, is_ipv6_available
 from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist
 from .server import start_wormhole_server
@@ -99,11 +100,20 @@ async def main_async(args: Namespace) -> None:
                 )
             )
 
+    # Import network monitoring utilities
+    from .network_monitor import monitor_network_changes, is_ipv6_available
+
+    # Set up shutdown and restart events
     shutdown_event = asyncio.Event()
+    restart_event = asyncio.Event()
 
     def _shutdown_handler():
         """Handles shutdown signals to gracefully stop the server."""
         shutdown_event.set()
+
+    def _restart_handler():
+        """Handles restart signals to restart the server with updated network settings."""
+        restart_event.set()
 
     # Set up signal handlers for graceful shutdown.
     loop = asyncio.get_running_loop()
@@ -113,12 +123,16 @@ async def main_async(args: Namespace) -> None:
     ]
 
     # Start the Wormhole server with the provided arguments.
+    # Enable dual-stack if requested and IPv6 is available
+    dual_stack = getattr(args, "auto_ipv6", False) and is_ipv6_available()
+
     server = await start_wormhole_server(
         args.host,
         args.port,
         args.auth,
         args.verbose,
         args.allow_private,
+        dual_stack=dual_stack,
     )
 
     # Log the server startup completion, 000000 means internal server ID.
@@ -130,26 +144,103 @@ async def main_async(args: Namespace) -> None:
         )
     )
 
-    # Wait for the shutdown signal.
-    await shutdown_event.wait()
+    # Start network monitoring if enabled
+    network_monitor_task = None
+    if getattr(args, "auto_ipv6", False):
+        logger.info(
+            flm(
+                "Network monitoring enabled for IPv6 changes.",
+                ident={"id": "000000", "client": args.host},
+                verbose=args.verbose,
+            )
+        )
+        network_monitor_task = asyncio.create_task(
+            monitor_network_changes(verbose=args.verbose, host=args.host)
+        )
 
-    # Gracefully shut down the server.
-    logger.info(
-        flm(
-            f"Shutdown signal received, closing server...",
-            ident={"id": "000000", "client": args.host},
-            verbose=args.verbose,
+        # Create a task to handle network change notifications
+        async def handle_network_changes():
+            try:
+                await network_monitor_task
+                # If network monitor completes, it means IPv6 became available
+                _restart_handler()
+            except Exception as e:
+                logger.error(
+                    flm(
+                        f"Network monitoring error: {e}",
+                        ident={"id": "000000", "client": args.host},
+                        verbose=args.verbose,
+                    )
+                )
+
+        asyncio.create_task(handle_network_changes())
+
+    # Main event loop - wait for shutdown, restart, or network change signals
+    try:
+        # Create tasks from the coroutines
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        pending_tasks = [shutdown_task]
+
+        if getattr(args, "auto_ipv6", False):
+            restart_task = asyncio.create_task(restart_event.wait())
+            pending_tasks.append(restart_task)
+
+        done, pending = await asyncio.wait(
+            pending_tasks, return_when=asyncio.FIRST_COMPLETED
         )
-    )
-    server.close()
-    await server.wait_closed()
-    logger.info(
-        flm(
-            f"Server has been shut down gracefully.",
-            ident={"id": "000000", "client": args.host},
-            verbose=args.verbose,
+
+        # Cancel any remaining tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        # Check which event completed
+        if restart_event.is_set():
+            logger.info(
+                flm(
+                    "Network change detected. Restarting server with IPv6 support...",
+                    ident={"id": "000000", "client": args.host},
+                    verbose=args.verbose,
+                )
+            )
+        elif shutdown_event.is_set():
+            logger.info(
+                flm(
+                    f"Shutdown signal received, closing server...",
+                    ident={"id": "000000", "client": args.host},
+                    verbose=args.verbose,
+                )
+            )
+
+    finally:
+        # Gracefully shut down the server.
+        server.close()
+        await server.wait_closed()
+        logger.info(
+            flm(
+                f"Server has been shut down gracefully.",
+                ident={"id": "000000", "client": args.host},
+                verbose=args.verbose,
+            )
         )
-    )
+
+        # Restart if needed (but not in test environments)
+        if restart_event.is_set() and not getattr(args, "_test_mode", False):
+            logger.info(
+                flm(
+                    "Restarting server...",
+                    ident={"id": "000000", "client": args.host},
+                    verbose=args.verbose,
+                )
+            )
+            # Reset events for restart
+            shutdown_event.clear()
+            restart_event.clear()
+            # Recursively call main_async for restart
+            await main_async(args)
 
 
 def main() -> int:
@@ -184,6 +275,11 @@ def main() -> int:
         "--allow-private",
         action="store_true",
         help="Allow proxying to private and reserved IP addresses (disabled by default)",
+    )
+    parser.add_argument(
+        "--auto-ipv6",
+        action="store_true",
+        help="Automatically detect IPv6 availability and restart server when IPv6 becomes available",
     )
     parser.add_argument(
         "-S",

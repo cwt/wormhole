@@ -27,6 +27,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            _test_mode=True,  # Prevent recursive calls in tests
         )
 
         # Mock all the dependencies
@@ -39,6 +40,8 @@ class TestMainAsync:
             patch("wormhole.proxy.start_wormhole_server") as mock_start_server,
             patch("wormhole.proxy.asyncio.Event") as mock_event,
             patch("wormhole.proxy.asyncio.get_running_loop") as mock_get_loop,
+            patch("wormhole.proxy.monitor_network_changes") as mock_monitor,
+            patch("wormhole.proxy.is_ipv6_available") as mock_ipv6_available,
         ):
 
             # Set up mocks
@@ -49,11 +52,18 @@ class TestMainAsync:
             mock_event.return_value = mock_shutdown_event
             mock_shutdown_event.wait = AsyncMock()
 
+            # Make sure getattr(args, 'auto_ipv6', False) returns False
+            delattr(args, "auto_ipv6") if hasattr(args, "auto_ipv6") else None
+
             mock_loop = Mock()
             mock_get_loop.return_value = mock_loop
 
             # Mock uvloop.__name__ attribute
             mock_uvloop.__name__ = "uvloop"
+
+            # Mock network monitoring functions
+            mock_ipv6_available.return_value = False
+            mock_monitor.return_value = AsyncMock()
 
             # Call the function
             await main_async(args)
@@ -61,7 +71,7 @@ class TestMainAsync:
             # Verify the calls
             mock_resolver.initialize.assert_called_once_with(verbose=0)
             mock_start_server.assert_called_once_with(
-                "127.0.0.1", 8080, None, 0, False
+                "127.0.0.1", 8080, None, 0, False, dual_stack=False
             )
             mock_shutdown_event.wait.assert_awaited_once()
             mock_server.close.assert_called_once()
@@ -81,6 +91,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            _test_mode=True,  # Prevent recursive calls in tests
         )
 
         # Mock all the dependencies
@@ -93,6 +104,8 @@ class TestMainAsync:
             patch("wormhole.proxy.start_wormhole_server") as mock_start_server,
             patch("wormhole.proxy.asyncio.Event") as mock_event,
             patch("wormhole.proxy.asyncio.get_running_loop") as mock_get_loop,
+            patch("wormhole.proxy.monitor_network_changes") as mock_monitor,
+            patch("wormhole.proxy.is_ipv6_available") as mock_ipv6_available,
         ):
 
             # Set up mocks
@@ -105,18 +118,27 @@ class TestMainAsync:
             mock_event.return_value = mock_shutdown_event
             mock_shutdown_event.wait = AsyncMock()
 
+            # Make sure getattr(args, 'auto_ipv6', False) returns False
+            delattr(args, "auto_ipv6") if hasattr(args, "auto_ipv6") else None
+
             mock_loop = Mock()
             mock_get_loop.return_value = mock_loop
 
             # Mock uvloop.__name__ attribute
             mock_uvloop.__name__ = "uvloop"
 
+            # Mock network monitoring functions
+            mock_ipv6_available.return_value = False
+            mock_monitor.return_value = AsyncMock()
+
             # Call the function
             await main_async(args)
 
             # Verify the calls
             mock_load_allowlist.assert_called_once()
-            mock_start_server.assert_called_once()
+            mock_start_server.assert_called_once_with(
+                "127.0.0.1", 8080, None, 0, False, dual_stack=False
+            )
 
     @pytest.mark.asyncio
     async def test_main_async_with_ad_block_db(self):
@@ -132,6 +154,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            _test_mode=True,  # Prevent recursive calls in tests
         )
 
         # Mock all the dependencies
@@ -144,6 +167,8 @@ class TestMainAsync:
             patch("wormhole.proxy.start_wormhole_server") as mock_start_server,
             patch("wormhole.proxy.asyncio.Event") as mock_event,
             patch("wormhole.proxy.asyncio.get_running_loop") as mock_get_loop,
+            patch("wormhole.proxy.monitor_network_changes") as mock_monitor,
+            patch("wormhole.proxy.is_ipv6_available") as mock_ipv6_available,
         ):
 
             # Set up mocks
@@ -156,18 +181,27 @@ class TestMainAsync:
             mock_event.return_value = mock_shutdown_event
             mock_shutdown_event.wait = AsyncMock()
 
+            # Make sure getattr(args, 'auto_ipv6', False) returns False
+            delattr(args, "auto_ipv6") if hasattr(args, "auto_ipv6") else None
+
             mock_loop = Mock()
             mock_get_loop.return_value = mock_loop
 
             # Mock uvloop.__name__ attribute
             mock_uvloop.__name__ = "uvloop"
 
+            # Mock network monitoring functions
+            mock_ipv6_available.return_value = False
+            mock_monitor.return_value = AsyncMock()
+
             # Call the function
             await main_async(args)
 
             # Verify the calls
             mock_load_ad_block_db.assert_called_once()
-            mock_start_server.assert_called_once()
+            mock_start_server.assert_called_once_with(
+                "127.0.0.1", 8080, None, 0, False, dual_stack=False
+            )
 
 
 class TestMain:
