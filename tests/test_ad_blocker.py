@@ -217,3 +217,89 @@ example.org
         mock_db.execute.assert_called()
         mock_db.executemany.assert_called()
         mock_db.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_update_database_blocklist_file_not_found(self):
+        """Test updating the ad-block database with a non-existent blocklist file."""
+        import tempfile
+        import os
+
+        # Create a temporary allowlist file
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as allow_temp:
+            allow_temp.write("allowed.com\nwhitelisted.org\n")
+            allowlist_path = allow_temp.name
+
+        # Create a non-existent blocklist path
+        nonexistent_blocklist = "/path/that/does/not/exist/blocklist.txt"
+
+        try:
+            # Mock the aiohttp session and responses
+            class MockResponse:
+                status = 200
+
+                async def text(self):
+                    return "0.0.0.0 example.com\n0.0.0.0 tracker.com\n"
+
+            # Create an async context manager that returns our mock response
+            class MockContextManager:
+                async def __aenter__(self):
+                    return MockResponse()
+
+                async def __aexit__(self, exc_type, exc_val, exc_tb):
+                    pass
+
+            # Mock the ClientSession context manager
+            class MockClientSession:
+                async def __aenter__(self):
+                    mock_session = AsyncMock()
+                    mock_session.get = Mock(return_value=MockContextManager())
+                    return mock_session
+
+                async def __aexit__(self, exc_type, exc_val, exc_tb):
+                    pass
+
+            # Mock the database
+            mock_db = AsyncMock()
+            mock_db.execute = AsyncMock()
+            mock_db.executemany = AsyncMock()
+            mock_db.commit = AsyncMock()
+
+            # Mock BLOCKLIST_URLS to avoid fetching real URLs
+            mock_urls = ["http://example.com/list1.txt"]
+
+            # Patch logger to verify warning message
+            with patch("wormhole.ad_blocker.logger") as mock_logger:
+                # Patch asyncio.sleep to avoid delays during testing
+                with patch("wormhole.ad_blocker.asyncio.sleep"):
+                    with patch("wormhole.ad_blocker.BLOCKLIST_URLS", mock_urls):
+                        with patch("aiohttp.ClientSession", MockClientSession):
+                            with patch(
+                                "aiosqlite.connect",
+                                return_value=AsyncMock(
+                                    __aenter__=AsyncMock(return_value=mock_db)
+                                ),
+                            ):
+                                # Call update_database with non-existent blocklist file
+                                await update_database(
+                                    "/tmp/test.db",
+                                    allowlist_path,
+                                    nonexistent_blocklist,
+                                )
+
+                # Verify that warning was logged for missing blocklist file
+                mock_logger.warning.assert_called()
+                # Check that the specific warning message was called
+                warning_calls = [
+                    call for call in mock_logger.warning.call_args_list
+                ]
+                warning_messages = [str(call[0][0]) for call in warning_calls]
+                warning_found = any(
+                    "Custom blocklist file not found" in msg
+                    for msg in warning_messages
+                )
+                assert (
+                    warning_found
+                ), "Expected warning for missing blocklist file was not logged"
+        finally:
+            # Clean up temporary file
+            os.unlink(allowlist_path)

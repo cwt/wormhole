@@ -19,6 +19,8 @@
   - **Secure Digest Authentication:** Wormhole supports HTTP Digest Authentication with the modern **SHA-256** algorithm. Passwords are never stored in plain text, providing a significant security improvement over Basic Authentication.
   - **Ad-blocking:** Wormhole can block domains based on a comprehensive list of ad-serving and tracking domains. You can create your own ad-block database or use the provided script to download and compile one from popular sources.
   - **Allowlist:** You can specify a list of domains that should never be blocked, ensuring that important services are always accessible.
+  - **Blocklist:** You can specify a list of domains to always block (inverted allowlist), providing an alternative approach to domain filtering.
+  - **Domain Filtering Priority:** When checking if a domain should be blocked, Wormhole follows this priority order: (1) Exact match in custom blocklist (highest priority - domains are blocked immediately), (2) Exact match in ad blocklist, (3) Exact match in allowlist, (4) Parent domain in custom blocklist, (5) Parent domain in ad blocklist, (6) Parent domain in allowlist (lowest priority). This allows fine-grained control over domain filtering where custom blocklists take precedence.
   - **HTTP/1.1 Upgrade:** Automatically attempts to upgrade HTTP/1.0 requests to HTTP/1.1 to leverage modern web features and improve performance.
   - **IPv6 Prioritization:** Prefers IPv6 connections when available for faster and more modern networking.
   - **Automatic IPv6 Detection:** Automatically detects when IPv6 becomes available and can restart the server to enable dual-stack support.
@@ -139,6 +141,8 @@ Wormhole includes built-in tools to securely manage users. These commands will p
     $ wormhole --ad-block-db ads.sqlite3
     ```
 
+    **Note:** If you used `--allowlist` and `--blocklist` during the `--update-ad-block-db` step, you still need to specify these options when running the server to apply them at runtime. The `--update-ad-block-db` step incorporates the allowlist/blocklist into the database, while server runtime options are applied separately for live filtering with the documented priority order.
+
 -----
 
 ## Command help
@@ -153,7 +157,7 @@ The output will be similar to this:
 usage: wormhole [-h] [-H HOST] [-p PORT] [--allow-private] [-S SYSLOG_HOST] [-P SYSLOG_PORT] [-l] [-v]
                 [--auth AUTH_FILE] [--auth-add <AUTH_FILE> <USERNAME>] [--auth-mod <AUTH_FILE> <USERNAME>]
                 [--auth-del <AUTH_FILE> <USERNAME>] [--ad-block-db AD_BLOCK_DB] [--update-ad-block-db DB_PATH]
-                [--allowlist ALLOWLIST]
+                [--allowlist ALLOWLIST] [--blocklist BLOCKLIST]
 
 Wormhole (3.1.3): Asynchronous I/O HTTP/S Proxy
 
@@ -185,6 +189,8 @@ Ad-Blocker Options:
                         Fetch public ad-block lists and compile them into a database file, then exit.
   --allowlist ALLOWLIST
                         Path to a file of domains to extend the default allowlist.
+  --blocklist BLOCKLIST
+                        Path to a file of domains to block (inverted allowlist).
 ```
 
 -----

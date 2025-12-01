@@ -11,9 +11,11 @@ from wormhole.safeguards import (
     is_private_ip,
     load_ad_block_db,
     load_allowlist,
+    load_blocklist,
     is_ad_domain,
     AD_BLOCK_SET,
     ALLOW_LIST_SET,
+    BLOCK_LIST_SET,
     DEFAULT_ALLOWLIST,
 )
 
@@ -25,6 +27,7 @@ class TestSafeguards:
         """Setup method to clear sets before each test."""
         AD_BLOCK_SET.clear()
         ALLOW_LIST_SET.clear()
+        BLOCK_LIST_SET.clear()
         # Add back the default allowlist
         ALLOW_LIST_SET.update(DEFAULT_ALLOWLIST)
 
@@ -213,6 +216,45 @@ class TestSafeguards:
         # Should not change the allowlist size
         assert result == original_size
 
+    def test_load_blocklist_success(self):
+        """Test successfully loading blocklist."""
+        # Create a temporary blocklist file
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+            f.write(
+                "blocked.example.com\nbad-domain.com\n# comment\n\nmalicious-site.com\n"
+            )
+            temp_path = f.name
+
+        try:
+            # Create a context for the test
+            context = RequestContext({"id": "test", "client": "127.0.0.1"}, 1)
+            result = load_blocklist(temp_path, "127.0.0.1", context)
+
+            # Should have loaded 3 domains
+            assert result == 3
+            assert "blocked.example.com" in BLOCK_LIST_SET
+            assert "bad-domain.com" in BLOCK_LIST_SET
+            assert "malicious-site.com" in BLOCK_LIST_SET
+        finally:
+            os.unlink(temp_path)
+
+    def test_load_blocklist_not_found(self):
+        """Test loading blocklist when file doesn't exist."""
+        original_size = len(BLOCK_LIST_SET)
+        # Create a context for the test
+        context = RequestContext({"id": "test", "client": "127.0.0.1"}, 1)
+        result = load_blocklist(
+            "/nonexistent/file.txt",
+            "127.0.0.1",
+            context,
+        )
+
+        # Should not change the blocklist size
+        assert result == original_size
+
     def test_is_ad_domain_exact_match_blocked(self):
         """Test is_ad_domain with exact match in blocklist."""
         AD_BLOCK_SET.add("ads.example.com")
@@ -236,6 +278,25 @@ class TestSafeguards:
         ALLOW_LIST_SET.add("example.com")
         result = is_ad_domain("safe.example.com")
         assert result is False
+
+    def test_is_ad_domain_exact_match_blocklist(self):
+        """Test is_ad_domain with exact match in custom blocklist."""
+        BLOCK_LIST_SET.add("blocked.example.com")
+        result = is_ad_domain("blocked.example.com")
+        assert result is True
+
+    def test_is_ad_domain_parent_blocklist(self):
+        """Test is_ad_domain with parent domain in custom blocklist."""
+        BLOCK_LIST_SET.add("example.com")
+        result = is_ad_domain("subdomain.example.com")
+        assert result is True
+
+    def test_is_ad_domain_blocklist_overrides_allowlist(self):
+        """Test that custom blocklist overrides allowlist for same domain."""
+        ALLOW_LIST_SET.add("example.com")
+        BLOCK_LIST_SET.add("example.com")
+        result = is_ad_domain("example.com")
+        assert result is True  # Should be blocked even though it's in allowlist
 
     def test_is_ad_domain_default(self):
         """Test is_ad_domain with default behavior."""

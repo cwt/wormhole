@@ -27,6 +27,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
         )
 
@@ -91,6 +92,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
         )
 
@@ -154,6 +156,7 @@ class TestMainAsync:
             allow_private=False,
             syslog_host=None,
             syslog_port=514,
+            blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
         )
 
@@ -199,6 +202,69 @@ class TestMainAsync:
 
             # Verify the calls
             mock_load_ad_block_db.assert_called_once()
+            mock_start_server.assert_called_once_with(
+                "127.0.0.1", 8080, None, 0, False, dual_stack=False
+            )
+
+    @pytest.mark.asyncio
+    async def test_main_async_with_blocklist(self):
+        """Test main_async with blocklist."""
+        # Create a mock args namespace
+        args = Namespace(
+            host="127.0.0.1",
+            port=8080,
+            allowlist=None,
+            ad_block_db=None,
+            auth=None,
+            verbose=0,
+            allow_private=False,
+            syslog_host=None,
+            syslog_port=514,
+            blocklist="/path/to/blocklist",
+            _test_mode=True,  # Prevent recursive calls in tests
+        )
+
+        # Mock all the dependencies
+        with (
+            patch("wormhole.proxy.uvloop") as mock_uvloop,
+            patch("wormhole.proxy.logger") as mock_logger,
+            patch("wormhole.proxy.resolver") as mock_resolver,
+            patch("wormhole.proxy.load_blocklist") as mock_load_blocklist,
+            patch("wormhole.proxy.start_wormhole_server") as mock_start_server,
+            patch("wormhole.proxy.asyncio.Event") as mock_event,
+            patch("wormhole.proxy.asyncio.get_running_loop") as mock_get_loop,
+            patch("wormhole.proxy.monitor_network_changes") as mock_monitor,
+            patch("wormhole.proxy.is_ipv6_available") as mock_ipv6_available,
+        ):
+
+            # Set up mocks
+            mock_load_blocklist.return_value = 5
+
+            mock_server = AsyncMock()
+            mock_start_server.return_value = mock_server
+
+            mock_shutdown_event = Mock()
+            mock_event.return_value = mock_shutdown_event
+            mock_shutdown_event.wait = AsyncMock()
+
+            # Make sure getattr(args, 'auto_ipv6', False) returns False
+            delattr(args, "auto_ipv6") if hasattr(args, "auto_ipv6") else None
+
+            mock_loop = Mock()
+            mock_get_loop.return_value = mock_loop
+
+            # Mock uvloop.__name__ attribute
+            mock_uvloop.__name__ = "uvloop"
+
+            # Mock network monitoring functions
+            mock_ipv6_available.return_value = False
+            mock_monitor.return_value = AsyncMock()
+
+            # Call the function
+            await main_async(args)
+
+            # Verify the calls
+            mock_load_blocklist.assert_called_once()
             mock_start_server.assert_called_once_with(
                 "127.0.0.1", 8080, None, 0, False, dual_stack=False
             )
@@ -341,6 +407,54 @@ class TestMain:
                 mock_args.auth_del = None
                 mock_args.update_ad_block_db = "/path/to/adblock.db"
                 mock_args.allowlist = None
+                mock_args.blocklist = None
+                mock_args.syslog_host = None
+                mock_args.syslog_port = 514
+                mock_args.verbose = 0
+                mock_args.auth = None  # Add the auth attribute
+                mock_parse.return_value = mock_args
+
+                mock_asyncio_run.return_value = None
+
+                # Mock the event loop to avoid RuntimeError
+                with patch("asyncio.get_event_loop") as mock_get_loop:
+                    mock_loop = Mock()
+                    mock_get_loop.return_value = mock_loop
+                    mock_loop.is_running.return_value = False
+
+                    result = main()
+                    assert result == 0
+                    mock_setup_logger.assert_called_once_with(
+                        None, 514, 0, async_mode=False
+                    )
+                    mock_asyncio_run.assert_called_once()
+
+    def test_main_update_ad_block_db_with_blocklist(self):
+        """Test main with --update-ad-block-db argument including blocklist."""
+        test_args = [
+            "wormhole",
+            "--update-ad-block-db",
+            "/path/to/adblock.db",
+            "--blocklist",
+            "/path/to/blocklist",
+        ]
+
+        with patch.object(sys, "argv", test_args):
+            with (
+                patch("wormhole.proxy.ArgumentParser.parse_args") as mock_parse,
+                patch("wormhole.proxy.setup_logger") as mock_setup_logger,
+                patch("wormhole.proxy.update_database") as mock_update_db,
+                patch("wormhole.proxy.asyncio.run") as mock_asyncio_run,
+            ):
+
+                mock_args = Mock()
+                mock_args.license = False
+                mock_args.auth_add = None
+                mock_args.auth_mod = None
+                mock_args.auth_del = None
+                mock_args.update_ad_block_db = "/path/to/adblock.db"
+                mock_args.allowlist = None
+                mock_args.blocklist = "/path/to/blocklist"
                 mock_args.syslog_host = None
                 mock_args.syslog_port = 514
                 mock_args.verbose = 0

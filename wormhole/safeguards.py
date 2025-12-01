@@ -30,6 +30,7 @@ DEFAULT_ALLOWLIST: set[str] = {
 # The runtime sets are initialized. The allowlist starts with the defaults.
 AD_BLOCK_SET: set[str] = set()
 ALLOW_LIST_SET: set[str] = DEFAULT_ALLOWLIST.copy()
+BLOCK_LIST_SET: set[str] = set()  # Custom blocklist from user file
 
 
 @lru_cache(maxsize=1)
@@ -165,16 +166,46 @@ def load_allowlist(path: str, host: str, context: RequestContext) -> int:
     return len(ALLOW_LIST_SET)
 
 
+def load_blocklist(path: str, host: str, context: RequestContext) -> int:
+    """
+    Loads domains from a user-provided file and adds them to the global blocklist set.
+
+    Args:
+        path (str): The path to the file containing the blocklist domains.
+        host (str): The host IP of the server, used for logging.
+        context (RequestContext): The request context containing ident and verbose level.
+
+    Returns:
+        int: The number of unique domains loaded into the blocklist.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip() and not line.startswith("#"):
+                    BLOCK_LIST_SET.add(line.strip().lower())
+    except FileNotFoundError:
+        logger.error(
+            flm(
+                f"Blocklist file not found at '{path}'",
+                context.ident,
+                context.verbose,
+            )
+        )
+    return len(BLOCK_LIST_SET)
+
+
 def is_ad_domain(hostname: str) -> bool:
     """
     Checks if a hostname is blocked using a more specific block/allow logic.
     The blocklist is checked before the allowlist to allow for more granular control.
 
     The order of checks is:
-    1. Exact match in blocklist -> Block
-    2. Exact match in allowlist -> Allow
-    3. Parent domain in blocklist -> Block
-    4. Parent domain in allowlist -> Allow
+    1. Exact match in custom blocklist -> Block
+    2. Exact match in ad blocklist -> Block
+    3. Exact match in allowlist -> Allow
+    4. Parent domain in custom blocklist -> Block
+    5. Parent domain in ad blocklist -> Block
+    6. Parent domain in allowlist -> Allow
 
     Args:
         hostname (str): The hostname to check.
@@ -184,26 +215,40 @@ def is_ad_domain(hostname: str) -> bool:
     """
     hostname_lower = hostname.lower()
 
-    # --- Highest Priority: Check for an exact match in the blocklist ---
-    # This ensures that if 'ad-api.x.com' is specifically in the blocklist,
+    # --- Highest Priority: Check for an exact match in the custom blocklist ---
+    # This ensures that if a domain is specifically in the user's blocklist,
+    # it is blocked immediately, even if it's on other lists
+    if hostname_lower in BLOCK_LIST_SET:
+        return True
+
+    # --- Second Priority: Check for an exact match in the ad blocklist ---
+    # This ensures that if 'ad-api.x.com' is specifically in the ad blocklist,
     # it is blocked immediately, even if 'x.com' is on the allowlist.
     if hostname_lower in AD_BLOCK_SET:
         return True
 
-    # --- Second Priority: Check for an exact match in the allowlist ---
+    # --- Third Priority: Check for an exact match in the allowlist ---
     if hostname_lower in ALLOW_LIST_SET:
         return False
 
-    # --- Third Priority: Check for parent domains in the blocklist ---
+    # --- Fourth Priority: Check for parent domains in the custom blocklist ---
+    # This blocks subdomains of a blocked parent (e.g., if 'example.com'
+    # is in custom blocklist, 'subdomain.example.com' will also be blocked).
+    parts = hostname_lower.split(".")
+    for i in range(1, len(parts)):
+        parent_domain = ".".join(parts[i:])
+        if parent_domain in BLOCK_LIST_SET:
+            return True
+
+    # --- Fifth Priority: Check for parent domains in the ad blocklist ---
     # This blocks subdomains of a blocked parent (e.g., if 'ad-server.com'
     # is blocked, 'analytics.ad-server.com' will also be blocked).
-    parts = hostname_lower.split(".")
     for i in range(1, len(parts)):
         parent_domain = ".".join(parts[i:])
         if parent_domain in AD_BLOCK_SET:
             return True
 
-    # --- Fourth Priority: Check for parent domains in the allowlist ---
+    # --- Sixth Priority: Check for parent domains in the allowlist ---
     # This allows subdomains of an allowed parent (e.g., if 'x.com' is
     # allowed, 'www.x.com' will also be allowed), unless the subdomain
     # itself was caught by the blocklist checks above.

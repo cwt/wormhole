@@ -127,7 +127,9 @@ def _filter_redundant_domains(domains: set[str]) -> set[str]:
 
 
 async def update_database(
-    db_path_str: str, allowlist_path_str: str | None
+    db_path_str: str,
+    allowlist_path_str: str | None,
+    blocklist_path_str: str | None = None,
 ) -> None:
     """
     Update the ad-block database with the latest blocklist data, applying an allowlist
@@ -137,6 +139,8 @@ async def update_database(
         db_path_str (str): Path to the SQLite database file.
         allowlist_path_str (str | None): Path to a custom allowlist file,
                                          or None for the default allowlist.
+        blocklist_path_str (str | None): Path to a custom blocklist file that will be
+                                         added to the database in addition to fetched lists.
 
     Returns:
         None
@@ -174,6 +178,20 @@ async def update_database(
         except FileNotFoundError:
             logger.warning(
                 "Custom allowlist file not found. Proceeding with defaults."
+            )
+
+    # Load custom blocklist to add to the database as well
+    if blocklist_path_str:
+        logger.info(f"Loading custom blocklist from: {blocklist_path_str}")
+        try:
+            with open(blocklist_path_str, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip() and not line.startswith("#"):
+                        all_blocked_domains.add(line.strip().lower())
+            logger.info(f"Added domains from custom blocklist to the database.")
+        except FileNotFoundError:
+            logger.warning(
+                "Custom blocklist file not found. Proceeding without it."
             )
 
     # Remove any domains from the blocklist that are exactly in the allowlist.

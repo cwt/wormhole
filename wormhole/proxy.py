@@ -13,7 +13,7 @@ from .context import RequestContext
 from .logger import logger, setup_logger, format_log_message as flm
 from .network_monitor import monitor_network_changes, is_ipv6_available
 from .resolver import resolver
-from .safeguards import load_ad_block_db, load_allowlist
+from .safeguards import load_ad_block_db, load_allowlist, load_blocklist
 from .server import start_wormhole_server
 from .version import VERSION
 from argparse import ArgumentParser, Namespace
@@ -76,6 +76,25 @@ async def main_async(args: Namespace) -> None:
             logger.info(
                 flm(
                     f"Loaded custom allowlist. Total allowlist size: {num_allowed} domains.",
+                    context.ident,
+                    context.verbose,
+                )
+            )
+
+    if args.blocklist:
+        # Create a context for the blocklist loading
+        context = RequestContext(
+            ident={"id": "000000", "client": args.host}, verbose=args.verbose
+        )
+        num_blocked = load_blocklist(
+            args.blocklist,
+            args.host,
+            context,
+        )
+        if num_blocked > 0:
+            logger.info(
+                flm(
+                    f"Loaded custom blocklist. Total blocklist size: {num_blocked} domains.",
                     context.ident,
                     context.verbose,
                 )
@@ -351,6 +370,11 @@ def main() -> int:
         default=None,
         help="Path to a file of domains to extend the default allowlist.",
     )
+    ad_block_group.add_argument(
+        "--blocklist",
+        default=None,
+        help="Path to a file of domains to block (inverted allowlist).",
+    )
     args = parser.parse_args()
 
     # --- Utility Command Handling ---
@@ -401,12 +425,16 @@ def main() -> int:
             if uvloop and hasattr(uvloop, "run"):
                 # Use the new uvloop.run() method for Python 3.12+
                 uvloop.run(
-                    update_database(args.update_ad_block_db, args.allowlist)
+                    update_database(
+                        args.update_ad_block_db, args.allowlist, args.blocklist
+                    )
                 )
             else:
                 # Use the standard asyncio.run() for older versions or if uvloop is not available
                 asyncio.run(
-                    update_database(args.update_ad_block_db, args.allowlist)
+                    update_database(
+                        args.update_ad_block_db, args.allowlist, args.blocklist
+                    )
                 )
         except Exception as e:
             logger.error(f"\nAn error occurred during update: {e}")
