@@ -22,14 +22,14 @@ from types import ModuleType
 import asyncio
 import signal
 
-uvloop: ModuleType | None = None
 try:
+    uvloop = None  # uvloop or winloop is an optional for speedup, not a requirement
     if sys.platform == "win32":
-        import winloop as uvloop
+        uvloop = __import__("uvloop")
     else:
-        import uvloop
+        uvloop = __import__("winloop")
 except ImportError:
-    pass  # uvloop or winloop is an optional for speedup, not a requirement
+    pass
 
 
 async def main_async(args: Namespace) -> None:

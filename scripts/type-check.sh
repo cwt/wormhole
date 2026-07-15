@@ -1,4 +1,4 @@
 #!/bin/bash
 
-poetry run mypy .
-
+# Ignore missing stubs for optional dependencies (uvloop, winloop)
+mypy --ignore-missing-imports .
