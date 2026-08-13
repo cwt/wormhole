@@ -32,7 +32,7 @@ class TestResolveAndValidateHostErrors:
             with patch(
                 "wormhole.handler.DNS_CACHE",
                 {
-                    "example.com": (["93.184.216.34"], 0, 1000)
+                    ("example.com", False): (["93.184.216.34"], 0, 1000)
                 },  # (ip_list, timestamp, ttl_expiration)
             ):
                 # Mock time to make the cache valid
@@ -55,7 +55,7 @@ class TestResolveAndValidateHostErrors:
             with patch(
                 "wormhole.handler.DNS_CACHE",
                 {
-                    "example.com": (["93.184.216.34"], 0, 100)
+                    ("example.com", False): (["93.184.216.34"], 0, 100)
                 },  # (ip_list, timestamp, ttl_expiration)
             ):
                 # Mock time to make the cache expired
@@ -146,3 +146,42 @@ class TestResolveAndValidateHostErrors:
 
                     # Should return the private IP since it's allowed
                     assert result == ["192.168.1.1"]
+
+    @pytest.mark.asyncio
+    async def test_resolve_and_validate_host_ssrf_cache_bypass_prevented(
+        self, context
+    ):
+        """Test that private IPs cached with allow_private=True are not returned for allow_private=False."""
+        from wormhole.handler import DNS_CACHE
+
+        host = "private.example.com"
+
+        # Pre-populate cache with allow_private=True result
+        DNS_CACHE[(host, True)] = (["192.168.1.1"], 0, 99999)
+
+        try:
+            # Mock the resolver to return the same private IP
+            with patch("wormhole.handler.is_ad_domain", return_value=False):
+                with patch("wormhole.handler.resolver") as mock_resolver:
+                    mock_resolver.resolve_with_ttl = AsyncMock(
+                        return_value=(['"192.168.1.1"'], 300)
+                    )
+                    with patch(
+                        "wormhole.handler.is_private_ip", return_value=True
+                    ):
+                        with patch(
+                            "wormhole.handler.has_public_ipv6",
+                            return_value=False,
+                        ):
+                            # Request with allow_private=False should NOT use cached entry
+                            with pytest.raises(PermissionError) as exc_info:
+                                await _resolve_and_validate_host(
+                                    host, context, False
+                                )
+                            assert "Blocked access" in str(exc_info.value)
+
+                            # Verify the cache was NOT updated with the denied result
+                            assert (host, False) not in DNS_CACHE
+        finally:
+            DNS_CACHE.pop((host, True), None)
+            DNS_CACHE.pop((host, False), None)

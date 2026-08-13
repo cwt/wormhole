@@ -32,7 +32,7 @@ class TestDnsTtlCaching:
             with patch(
                 "wormhole.handler.DNS_CACHE",
                 {
-                    "example.com": (["93.184.216.34"], 0, 200)
+                    ("example.com", False): (["93.184.216.34"], 0, 200)
                 },  # (ip_list, timestamp, ttl_expiration)
             ):
                 # Mock time to make the cache valid (current time 100 < expiration time 200)
@@ -54,7 +54,7 @@ class TestDnsTtlCaching:
             # Mock the DNS cache to have an expired entry (current time 300 > expiration time 200)
             with patch.dict(
                 "wormhole.handler.DNS_CACHE",
-                {"example.com": (["93.184.216.34"], 0, 200)},
+                {("example.com", False): (["93.184.216.34"], 0, 200)},
             ):
                 # Mock time to make the cache expired
                 with patch("wormhole.handler.time.time", return_value=300):
@@ -84,9 +84,9 @@ class TestDnsTtlCaching:
                                 assert result == ["93.184.216.35"]
 
                                 # Verify that the cache was updated with the new entry and its TTL
-                                assert "example.com" in DNS_CACHE
+                                assert ("example.com", False) in DNS_CACHE
                                 cached_ips, _, ttl_expiration = DNS_CACHE[
-                                    "example.com"
+                                    ("example.com", False)
                                 ]
                                 assert cached_ips == ["93.184.216.35"]
                                 # Should be set to expire in 300 seconds from now (time.time() + 300)
@@ -134,9 +134,9 @@ class TestDnsTtlCaching:
                             assert "93.184.216.35" in result
 
                             # Verify that the cache was updated with the minimum TTL
-                            assert "example.com" in DNS_CACHE
+                            assert ("example.com", False) in DNS_CACHE
                             cached_ips, _, ttl_expiration = DNS_CACHE[
-                                "example.com"
+                                ("example.com", False)
                             ]
                             assert len(cached_ips) == 2
                             # Expiration should be 150 seconds from our mocked time (1000 + 150 = 1150)

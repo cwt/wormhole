@@ -9,9 +9,10 @@ import random
 import time
 
 # --- DNS Cache for Performance ---
-DNS_CACHE: dict[str, tuple[list[str], float, float]] = (
+# Key is (hostname, allow_private) to prevent SSRF cache pollution
+DNS_CACHE: dict[tuple[str, bool], tuple[list[str], float, float]] = (
     {}
-)  # (ip_list, timestamp, ttl_expiration)
+)  # ((ip_list, timestamp, ttl_expiration)
 
 
 # --- Modernized Relay Stream Function ---
@@ -95,9 +96,10 @@ async def _resolve_and_validate_host(
     if is_ad_domain(host):
         raise PermissionError(f"Blocked ad domain")
 
-    # Check cache first
-    if host in DNS_CACHE:
-        ip_list, timestamp, ttl_expiration = DNS_CACHE[host]
+    # Check cache first — key includes allow_private to prevent SSRF bypass
+    cache_key = (host, allow_private)
+    if cache_key in DNS_CACHE:
+        ip_list, timestamp, ttl_expiration = DNS_CACHE[cache_key]
         if time.time() < ttl_expiration:
             logger.debug(
                 flm(
@@ -157,7 +159,7 @@ async def _resolve_and_validate_host(
 
     # Update cache with TTL-based expiration
     ttl_expiration = time.time() + min_ttl
-    DNS_CACHE[host] = (final_ip_list, time.time(), ttl_expiration)
+    DNS_CACHE[cache_key] = (final_ip_list, time.time(), ttl_expiration)
     logger.debug(
         flm(
             (
