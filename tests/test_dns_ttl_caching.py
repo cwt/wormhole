@@ -141,3 +141,52 @@ class TestDnsTtlCaching:
                             assert len(cached_ips) == 2
                             # Expiration should be 150 seconds from our mocked time (1000 + 150 = 1150)
                             assert ttl_expiration == 1150
+
+    @pytest.mark.asyncio
+    async def test_dns_cache_evicts_oldest_when_full(self, context):
+        """Test that oldest DNS cache entries are evicted when max size is exceeded."""
+        from wormhole.handler import DNS_CACHE, DNS_CACHE_MAX_SIZE
+
+        host = "example.com"
+
+        with patch("wormhole.handler.is_ad_domain", return_value=False):
+            with patch("wormhole.handler.resolver") as mock_resolver:
+                mock_resolver.resolve_with_ttl = AsyncMock(
+                    return_value=(["93.184.216.34"], 300)
+                )
+                with patch(
+                    "wormhole.handler.is_private_ip", return_value=False
+                ):
+                    with patch(
+                        "wormhole.handler.has_public_ipv6", return_value=False
+                    ):
+                        with patch(
+                            "wormhole.handler.time.time", return_value=1000
+                        ):
+                            # Pre-populate cache to exceed max size
+                            DNS_CACHE.clear()
+                            for i in range(DNS_CACHE_MAX_SIZE + 5):
+                                DNS_CACHE[(f"host{i}.com", False)] = (
+                                    ["1.2.3.4"],
+                                    1000,
+                                    99999,
+                                )
+
+                            # Resolve a new host
+                            result = await _resolve_and_validate_host(
+                                host, context, False
+                            )
+
+                            assert result == ["93.184.216.34"]
+
+                            # Cache should not exceed max size
+                            assert len(DNS_CACHE) <= DNS_CACHE_MAX_SIZE
+
+                            # Oldest entries should have been evicted
+                            assert (f"host0.com", False) not in DNS_CACHE
+
+                            # New entry should be present
+                            assert (host, False) in DNS_CACHE
+
+                            # Clean up
+                            DNS_CACHE.clear()

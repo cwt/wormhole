@@ -13,6 +13,7 @@ import time
 DNS_CACHE: dict[tuple[str, bool], tuple[list[str], float, float]] = (
     {}
 )  # ((ip_list, timestamp, ttl_expiration))
+DNS_CACHE_MAX_SIZE: int = 10_000  # Max cached hosts before LRU eviction
 
 # --- Max Payload Size ---
 MAX_CONTENT_LENGTH: int = 10 * 1024 * 1024  # 10 MB
@@ -178,6 +179,9 @@ async def _resolve_and_validate_host(
     # Update cache with TTL-based expiration
     ttl_expiration = time.time() + min_ttl
     DNS_CACHE[cache_key] = (final_ip_list, time.time(), ttl_expiration)
+    # Evict oldest entry if cache exceeds max size
+    while len(DNS_CACHE) > DNS_CACHE_MAX_SIZE:
+        DNS_CACHE.pop(next(iter(DNS_CACHE)))
     logger.debug(
         flm(
             (
