@@ -32,7 +32,7 @@ class Resolver:
         if not Resolver._instance:
             self.resolver: aiodns.DNSResolver | None = None
             self._resolver_loop: asyncio.AbstractEventLoop | None = None
-            self.hosts_cache: dict[str, str] = {}
+            self.hosts_cache: dict[str, list[str]] = {}
             self.verbose: int = 0  # Verbosity level, configured separately
             Resolver._instance = self
 
@@ -120,7 +120,9 @@ class Resolver:
                     hostnames = hostnames_str.strip().split()
 
                     for hostname in hostnames:
-                        self.hosts_cache[hostname.lower()] = ip_address
+                        self.hosts_cache.setdefault(
+                            hostname.lower(), []
+                        ).append(ip_address)
 
             logger.info(
                 flm(
@@ -172,16 +174,16 @@ class Resolver:
 
         hostname_lower = hostname.lower()
         # 1. Check hosts file cache
-        if ip := self.hosts_cache.get(hostname_lower):
+        if ips := self.hosts_cache.get(hostname_lower):
             logger.debug(
                 flm(
-                    f"Resolved to {ip} from hosts file cache.",
+                    f"Resolved to {ips} from hosts file cache.",
                     ident,
                     self.verbose,
                 )
             )
             # Hosts file entries don't have TTL, use a default high value
-            return [ip], 3600
+            return ips, 3600
 
         # 2. Query DNS using aiodns for IPv4 and IPv6 addresses concurrently
         results = await asyncio.gather(

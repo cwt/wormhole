@@ -53,26 +53,17 @@ class TestTools:
         assert host == "example.com"
         assert port == 80  # Default port
 
-    # Note: The current implementation doesn't properly handle IPv6 addresses
-    # These tests reflect the current behavior, not ideal IPv6 handling
-
     def test_get_host_and_port_ipv6_with_port(self):
-        """Test get_host_and_port with IPv6-like string and port."""
-        host_port = "[2001:db8::1]:8080"
-        host, port = get_host_and_port(host_port)
-        # Current implementation incorrectly parses this
-        # This test documents current behavior
-        assert host == "[2001:db8:"  # Incorrectly parsed
-        assert port == 1  # Incorrectly parsed
+        """Test get_host_and_port with bracketed IPv6 and port."""
+        host, port = get_host_and_port("[2001:db8::1]:8080")
+        assert host == "2001:db8::1"
+        assert port == 8080
 
     def test_get_host_and_port_ipv6_without_port(self):
-        """Test get_host_and_port with IPv6-like string without port."""
-        host_port = "2001:db8::1"
-        host, port = get_host_and_port(host_port)
-        # Current implementation incorrectly parses this
-        # This test documents current behavior
-        assert host == "2001:db8:"
-        assert port == 1
+        """Test get_host_and_port with bare IPv6 address."""
+        host, port = get_host_and_port("2001:db8::1")
+        assert host == "2001:db8::1"
+        assert port == 80  # default port for bare IPv6
 
     def test_get_host_and_port_custom_default_port(self):
         """Test get_host_and_port with custom default port."""

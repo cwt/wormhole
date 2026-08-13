@@ -1,7 +1,8 @@
 import re
 
 # Regex patterns for extracting host and port from a string
-REGEX_HOST = re.compile(r"(.+?):([0-9]{1,5})")
+# Handles bracketed IPv6 [::1]:port and regular host:port formats
+REGEX_HOST_PORT = re.compile(r"\[?(.+?)\]?:([0-9]{1,5})$", re.IGNORECASE)
 
 
 def get_host_and_port(
@@ -18,8 +19,27 @@ def get_host_and_port(
     Returns:
         tuple[str, int]: A tuple containing the host and port.
     """
-    if match := REGEX_HOST.search(hostname):
-        return match.group(1), int(match.group(2))
+    # Handle bracketed IPv6: [::1]:8080
+    if hostname.startswith("[") and "]" in hostname:
+        bracket_end = hostname.index("]")
+        host = hostname[1:bracket_end]
+        rest = hostname[bracket_end + 1 :]
+        if rest.startswith(":"):
+            port = int(rest[1:])
+        else:
+            port = int(default_port or "80")
+        return host, port
+
+    # Bare IPv6 addresses contain 2+ colons and have no port
+    if hostname.count(":") >= 2:
+        return hostname, int(default_port or "80")
+
+    # Handle host:port
+    if match := REGEX_HOST_PORT.search(hostname):
+        host = match.group(1)
+        port = int(match.group(2))
+        return host, port
+
     return hostname, int(default_port or "80")
 
 

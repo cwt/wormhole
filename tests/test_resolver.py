@@ -58,11 +58,13 @@ class TestResolver:
         """Test successfully loading hosts file."""
         resolver_instance = Resolver.get_instance()
         resolver_instance.initialize(verbose=1)
+        # Clear any stale cache from real /etc/hosts
+        resolver_instance.hosts_cache.clear()
         resolver_instance._load_hosts_file()
 
-        # Should have loaded the hosts
-        assert resolver_instance.hosts_cache["localhost"] == "127.0.0.1"
-        assert resolver_instance.hosts_cache["example.com"] == "192.168.1.1"
+        # Should have loaded the hosts (now as lists per hostname)
+        assert "127.0.0.1" in resolver_instance.hosts_cache["localhost"]
+        assert resolver_instance.hosts_cache["example.com"] == ["192.168.1.1"]
 
     @patch("pathlib.Path.exists", return_value=False)
     def test_load_hosts_file_not_found(self, mock_exists):
@@ -94,11 +96,11 @@ class TestResolver:
         """Test resolving hostname from hosts cache."""
         resolver_instance = Resolver.get_instance()
         resolver_instance.initialize(verbose=1)
-        resolver_instance.hosts_cache["example.com"] = "192.168.1.1"
+        resolver_instance.hosts_cache["example.com"] = ["192.168.1.1"]
 
         result = await resolver_instance.resolve("example.com")
 
-        # Should return the cached IP
+        # Should return the cached IP list
         assert result == ["192.168.1.1"]
 
     @pytest.mark.asyncio
