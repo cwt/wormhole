@@ -231,7 +231,17 @@ async def _create_fastest_connection(
                     for p_task in pending:
                         p_task.cancel()
                     if pending:
-                        await asyncio.gather(*pending, return_exceptions=True)
+                        # Close any writers from tasks that completed before cancellation
+                        for pending_result in await asyncio.gather(
+                            *pending, return_exceptions=True
+                        ):
+                            if (
+                                isinstance(pending_result, tuple)
+                                and len(pending_result) == 2
+                            ):
+                                _, p_writer = pending_result
+                                if not p_writer.is_closing():
+                                    p_writer.close()
                     peer = writer.get_extra_info("peername")
                     logger.debug(
                         flm(
