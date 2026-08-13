@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import platform
 
 # Ensure the script is run with a compatible Python version.
 if sys.version_info < (3, 11):
@@ -22,14 +23,40 @@ from types import ModuleType
 import asyncio
 import signal
 
-try:
-    uvloop = None  # uvloop or winloop is an optional for speedup, not a requirement
-    if sys.platform == "win32":
-        uvloop = __import__("uvloop")
-    else:
-        uvloop = __import__("winloop")
-except ImportError:
-    pass
+def select_event_loop():
+    """Select the best available asyncio event loop implementation.
+
+    Linux on x86_64/aarch64/riscv64 with CPython 3.13/3.14 prefers Talyn
+    (https://github.com/cwt/talyn), which performs its own runtime safety
+    checks; on any failure it falls back to uvloop.
+    Windows uses Winloop (the Windows port of uvloop) without the extra guards.
+    If no fast loop can be imported, returns None and the standard library
+    asyncio loop is used instead.
+
+    Only the module is imported here; the actual install() is deferred to main()
+    so that importing this module does not install a global event loop policy.
+    """
+    if (
+        sys.platform == "linux"
+        and platform.machine() in ("x86_64", "aarch64", "riscv64")
+        and sys.version_info[:2] in ((3, 13), (3, 14))
+    ):
+        try:
+            import talyn
+            return talyn
+        except ImportError:
+            pass
+    try:
+        if sys.platform == "win32":
+            import winloop
+            return winloop
+        import uvloop
+        return uvloop
+    except ImportError:
+        return None
+
+
+fastloop = select_event_loop()
 
 
 async def main_async(args: Namespace) -> None:
@@ -42,10 +69,10 @@ async def main_async(args: Namespace) -> None:
     Returns:
         None
     """
-    if uvloop:
+    if fastloop:
         logger.info(
             flm(
-                f"Using high-performance event loop: {uvloop.__name__}",
+                f"Using high-performance event loop: {fastloop.__name__}",
                 ident={"id": "000000", "client": args.host},
                 verbose=args.verbose,
             )
@@ -401,14 +428,34 @@ def main() -> int:
     # Determine if we are running the full async server or a utility.
     is_server_mode = not args.update_ad_block_db
 
-    # Use the new uvloop.run() approach for Python 3.12+
-    # For older versions or if uvloop is not available, we'll use the standard approach
-    if uvloop and hasattr(uvloop, "run"):
-        # For Python 3.12+, we'll use uvloop.run() directly when starting the server
-        pass  # We'll handle this in the asyncio.run() call
-    elif uvloop:
-        # For older versions, use the deprecated install() method
-        uvloop.install()
+    # Run a coroutine on the selected fast event loop, falling back to the
+    # standard library asyncio loop when the optimized loop cannot actually run
+    # (e.g. Talyn raises while creating its loop in this environment).
+    def _run_async(coro_factory) -> None:
+        started = False
+        async def wrap_coro():
+            nonlocal started
+            started = True
+            return await coro_factory()
+
+        try:
+            if fastloop is not None:
+                if hasattr(fastloop, "run"):
+                    fastloop.run(wrap_coro())
+                    return
+                fastloop.install()
+            asyncio.run(wrap_coro())
+        except Exception:
+            if fastloop is not None and not started:
+                # Optimized loop failed at runtime setup; retry on plain asyncio.
+                logger.warning(
+                    "Optimized event loop %s unavailable; using standard asyncio.",
+                    fastloop.__name__,
+                )
+                asyncio.set_event_loop_policy(None)
+                asyncio.run(coro_factory())
+            else:
+                raise
 
     # Setup logging. Disable async features for synchronous utility commands.
     setup_logger(
@@ -421,21 +468,12 @@ def main() -> int:
     if args.update_ad_block_db:
         # For this standalone utility, configure a simple logger to show progress.
         logger.info(f"Updating ad-block database at: {args.update_ad_block_db}")
+        def run_update():
+            return update_database(
+                args.update_ad_block_db, args.allowlist, args.blocklist
+            )
         try:
-            if uvloop and hasattr(uvloop, "run"):
-                # Use the new uvloop.run() method for Python 3.12+
-                uvloop.run(
-                    update_database(
-                        args.update_ad_block_db, args.allowlist, args.blocklist
-                    )
-                )
-            else:
-                # Use the standard asyncio.run() for older versions or if uvloop is not available
-                asyncio.run(
-                    update_database(
-                        args.update_ad_block_db, args.allowlist, args.blocklist
-                    )
-                )
+            _run_async(run_update)
         except Exception as e:
             logger.error(f"\nAn error occurred during update: {e}")
             return 1
@@ -448,13 +486,10 @@ def main() -> int:
     if args.auth and not Path(args.auth).is_file():
         parser.error(f"Authentication file not found: {args.auth}")
 
+    def run_main():
+        return main_async(args)
     try:
-        if uvloop and hasattr(uvloop, "run"):
-            # Use the new uvloop.run() method for Python 3.12+
-            uvloop.run(main_async(args))
-        else:
-            # Use the standard asyncio.run() for older versions or if uvloop is not available
-            asyncio.run(main_async(args))
+        _run_async(run_main)
     except KeyboardInterrupt:
         print("\nInterrupted by user. Exiting.")
     except Exception as e:

@@ -38,6 +38,7 @@ wormhole = "wormhole.proxy:main"
 # Standard section for optional dependencies
 [project.optional-dependencies]
 performance = ["winloop", "uvloop"]
+talyn = ["talyn"]
 
 # Poetry-specific configuration
 [tool.poetry]
@@ -55,6 +56,7 @@ pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
 # Optional performance packages
 winloop = { version = "*", markers = "sys_platform == 'win32'", optional = true }
 uvloop = { version = "*", markers = "sys_platform != 'win32'", optional = true }
+talyn = { version = "*", markers = "sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'riscv64')", optional = true }
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.5"

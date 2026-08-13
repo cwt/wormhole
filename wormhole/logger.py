@@ -52,7 +52,7 @@ class LogThrottler:
         self.last_message = None
         self.repeat_count = 0
 
-    def process(self, message: str, **kwargs):
+    def process(self, message: str, *args, **kwargs):
         """
         Processes a log message, either logging it or incrementing a repeat counter.
 

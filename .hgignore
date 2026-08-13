@@ -9,3 +9,5 @@ dist
 *.sqlite3
 *.passwd
 *.auth
+allowlist.txt
+blocklist.txt
