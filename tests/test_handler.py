@@ -129,6 +129,22 @@ class TestRelayStream:
         mock_writer.wait_closed.assert_not_called()
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_relay_stream_read_timeout(
+        self, mock_reader, mock_writer, context
+    ):
+        """Test relay_stream handles read timeout gracefully."""
+        # Mock the reader to timeout on read
+        mock_reader.at_eof.return_value = False
+        mock_reader.read.side_effect = asyncio.TimeoutError("Read timeout")
+
+        result = await relay_stream(mock_reader, mock_writer, context)
+
+        # Should handle timeout gracefully and return None
+        assert result is None
+        # Writer is closed in finally block when stream ends (including timeout)
+        mock_writer.close.assert_called_once()
+
 
 class TestCreateFastestConnection:
     """Test cases for the _create_fastest_connection function."""

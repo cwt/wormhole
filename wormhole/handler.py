@@ -17,6 +17,9 @@ DNS_CACHE: dict[tuple[str, bool], tuple[list[str], float, float]] = (
 # --- Max Payload Size ---
 MAX_CONTENT_LENGTH: int = 10 * 1024 * 1024  # 10 MB
 
+# --- Stream Relay Timeout ---
+STREAM_READ_TIMEOUT: float = 300.0  # 5 minutes idle timeout
+
 
 # --- Modernized Relay Stream Function ---
 
@@ -45,7 +48,19 @@ async def relay_stream(
     first_line: bytes | None = None
     try:
         while not reader.at_eof():
-            data = await reader.read(4096)
+            try:
+                data = await asyncio.wait_for(
+                    reader.read(4096), timeout=STREAM_READ_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.debug(
+                    flm(
+                        f"Stream read timeout after {STREAM_READ_TIMEOUT}s idle",
+                        context.ident,
+                        context.verbose,
+                    )
+                )
+                break
             if not data:
                 break
 
