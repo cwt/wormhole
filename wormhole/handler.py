@@ -12,7 +12,10 @@ import time
 # Key is (hostname, allow_private) to prevent SSRF cache pollution
 DNS_CACHE: dict[tuple[str, bool], tuple[list[str], float, float]] = (
     {}
-)  # ((ip_list, timestamp, ttl_expiration)
+)  # ((ip_list, timestamp, ttl_expiration))
+
+# --- Max Payload Size ---
+MAX_CONTENT_LENGTH: int = 10 * 1024 * 1024  # 10 MB
 
 
 # --- Modernized Relay Stream Function ---
@@ -660,6 +663,15 @@ async def parse_request(
     # Read the payload if Content-Length is specified.
     payload = b""
     if content_length := get_content_length(header_str):
+        if content_length > MAX_CONTENT_LENGTH:
+            logger.warning(
+                flm(
+                    f"Payload too large: {content_length} bytes (max {MAX_CONTENT_LENGTH})",
+                    context.ident,
+                    context.verbose,
+                )
+            )
+            return None, None, None
         try:
             payload = await client_reader.readexactly(content_length)
         except asyncio.IncompleteReadError:
