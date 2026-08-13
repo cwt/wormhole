@@ -1609,6 +1609,34 @@ files = [
 ]
 
 [[package]]
+name = "talyn"
+version = "0.8.8"
+description = "Talyn: A robust, stable, and realistically fast Zig-powered event loop for Python's asyncio."
+optional = true
+python-versions = ">=3.13"
+groups = ["main"]
+markers = "python_version >= \"3.13\" and sys_platform == \"linux\" and (platform_machine == \"x86_64\" or platform_machine == \"aarch64\" or platform_machine == \"riscv64\") and extra == \"talyn\""
+files = [
+    {file = "talyn-0.8.8-cp313-cp313-manylinux_2_36_aarch64.whl", hash = "sha256:2b9c3e4c29359ad7e867474a2bd3ae47216bec18389eb5168721b1063e88f489"},
+    {file = "talyn-0.8.8-cp313-cp313-manylinux_2_36_riscv64.whl", hash = "sha256:bee5c2e96640f7145dc9ae02a3791c894b4349fd1cdd659691d7dbb46c72d065"},
+    {file = "talyn-0.8.8-cp313-cp313-manylinux_2_36_x86_64.whl", hash = "sha256:929da8435a1b298b77662f2f32b85412229b3af8dc845e22b53e2e54557eea74"},
+    {file = "talyn-0.8.8-cp313-cp313t-manylinux_2_36_aarch64.whl", hash = "sha256:a484c25966c11fecd6170aef2626e4063fff011150640e71b39ae0b80a6350b3"},
+    {file = "talyn-0.8.8-cp313-cp313t-manylinux_2_36_riscv64.whl", hash = "sha256:9ae9e36b84051f1829413b3f0ecca3e5c3824333ac95f6670acb34b552c77307"},
+    {file = "talyn-0.8.8-cp313-cp313t-manylinux_2_36_x86_64.whl", hash = "sha256:ae6bea40224bf2a77ef79bbcc7dbe3a9e780351fd1d719d81fd9c4b27ea1ed84"},
+    {file = "talyn-0.8.8-cp314-cp314-manylinux_2_36_aarch64.whl", hash = "sha256:5005b9c1bc24cc09ba1d2eb2639bfcced432377acd530a88b2da8d8ec1a6b23f"},
+    {file = "talyn-0.8.8-cp314-cp314-manylinux_2_36_riscv64.whl", hash = "sha256:5b09f5566568f5f9f3032ea905d3fe1b3bac026c2d86c1bc3631e3d849556feb"},
+    {file = "talyn-0.8.8-cp314-cp314-manylinux_2_36_x86_64.whl", hash = "sha256:6d97eac007da12724f66c5b1483b319a259aa7d3af063b973fd3cef91496a898"},
+    {file = "talyn-0.8.8-cp314-cp314t-manylinux_2_36_aarch64.whl", hash = "sha256:6916b77b71f0959ad5e9a5babca7aac2d3518f9681f167acbf55d1039bf88f56"},
+    {file = "talyn-0.8.8-cp314-cp314t-manylinux_2_36_riscv64.whl", hash = "sha256:7b0dff8c50138796d074b351ea54ac545f4c23add7656c15cae92f5f74ccb9dc"},
+    {file = "talyn-0.8.8-cp314-cp314t-manylinux_2_36_x86_64.whl", hash = "sha256:90a821fffe2494708b6aa265fdf79b28fbd00030e5a8b237d3a31c84e044555b"},
+]
+
+[package.extras]
+benchmark = ["matplotlib", "pillow", "prettytable", "uvloop"]
+lint = ["mypy", "ruff"]
+test = ["pytest", "pytest-asyncio"]
+
+[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -1855,8 +1883,9 @@ propcache = ">=0.2.1"
 
 [extras]
 performance = ["uvloop", "winloop"]
+talyn = ["talyn"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "a6c6de4a8e303b44ab46ae66761f269bebaed247322480bb4ec78b3fe5db07fb"
+content-hash = "ce475bea7d594f5350109009bb22b5fca34be5f6f8cc6e559ca46d93eae7a32a"

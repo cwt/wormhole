@@ -95,6 +95,11 @@ class LogThrottler:
 # We just need to ensure other modules import this configured instance.
 # Track current throttler instances for cleanup on re-setup.
 _active_throttlers: list[LogThrottler] = []
+_ORIG_LOGGER_METHODS: dict = {
+    "info": logger.info,
+    "warning": logger.warning,
+    "error": logger.error,
+}
 
 
 def _cancel_active_throttlers() -> None:
@@ -165,13 +170,16 @@ def setup_logger(
         logging.DEBUG if verbose >= 2 else logging.CRITICAL
     )
 
-    # Only enable the async LogThrottler if we are in async mode.
+    _cancel_active_throttlers()
     if async_mode and verbose < 2:
-        _cancel_active_throttlers()
         for level_name in ("info", "warning", "error"):
             throttler = LogThrottler(logger, level_name)
             _active_throttlers.append(throttler)
             setattr(logger, level_name, throttler.process)  # type: ignore[misc]
+    else:
+        for level_name in ("info", "warning", "error"):
+            if level_name in _ORIG_LOGGER_METHODS:
+                setattr(logger, level_name, _ORIG_LOGGER_METHODS[level_name])
 
 
 def format_log_message(

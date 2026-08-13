@@ -176,6 +176,14 @@ async def verify_credentials(
         ]
         for _k in _expired_keys:
             del _ISSUED_NONCES[_k]
+        if _expired_keys:
+            _USED_NONCES.difference_update(
+                {
+                    entry
+                    for entry in _USED_NONCES
+                    if entry[0] in set(_expired_keys)
+                }
+            )
 
         if nonce not in _ISSUED_NONCES:
             logger.debug("Nonce not recognised or expired")

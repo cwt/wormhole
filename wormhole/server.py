@@ -223,7 +223,8 @@ async def start_wormhole_server(
                 sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind((host, port))
+                bind_host = "::" if host in ("0.0.0.0", "::") else host
+                sock.bind((bind_host, port))
                 sock.listen(128)
 
                 server = await asyncio.start_server(

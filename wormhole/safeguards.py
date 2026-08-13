@@ -259,16 +259,3 @@ def is_ad_domain(hostname: str) -> bool:
 
     # Default to not blocking if no specific rules match
     return False
-    # This blocks subdomains of a blocked parent (e.g., if 'ad-server.com'
-    # is blocked, 'analytics.ad-server.com' will also be blocked).
-    for parent_domain in parent_domains:
-        if parent_domain in AD_BLOCK_SET:
-            return True
-
-    # --- Sixth Priority: Check for parent domains in the allowlist ---
-    # This allows subdomains of an allowed parent (e.g., if 'x.com' is
-    # allowed, 'www.x.com' will also be allowed), unless the subdomain
-    # itself was caught by the blocklist checks above.
-    for parent_domain in parent_domains:
-        if parent_domain in ALLOW_LIST_SET:
-            return False

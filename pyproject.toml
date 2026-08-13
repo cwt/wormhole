@@ -56,7 +56,7 @@ pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
 # Optional performance packages
 winloop = { version = "*", markers = "sys_platform == 'win32'", optional = true }
 uvloop = { version = "*", markers = "sys_platform != 'win32'", optional = true }
-talyn = { version = "*", markers = "sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'riscv64')", optional = true }
+talyn = { version = "*", markers = "python_version >= '3.13' and sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'riscv64')", optional = true }
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.5"

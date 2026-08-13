@@ -246,7 +246,21 @@ async def _create_fastest_connection(
             for task in done:
                 try:
                     reader, writer = task.result()
-                    # On success, cancel pending tasks and return the connection
+                    # On success, cancel pending tasks and close any extra completed tasks in done
+                    other_done = done - {task}
+                    for extra_task in other_done:
+                        try:
+                            if (
+                                not extra_task.cancelled()
+                                and extra_task.exception() is None
+                            ):
+                                res = extra_task.result()
+                                if isinstance(res, tuple) and len(res) == 2:
+                                    _, extra_writer = res
+                                    if not extra_writer.is_closing():
+                                        extra_writer.close()
+                        except Exception:
+                            pass
                     for p_task in pending:
                         p_task.cancel()
                     if pending:

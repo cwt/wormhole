@@ -160,8 +160,8 @@ class TestResolver:
 
         # Simulate a closed event loop by setting a fake old loop
         old_loop = Mock()
-        resolver_instance._resolver_loop = old_loop
         resolver_instance.resolver = AsyncMock()  # Old resolver
+        resolver_instance._resolver_loop = old_loop
 
         new_loop = asyncio.get_running_loop()
         mock_new_resolver = AsyncMock()
@@ -172,9 +172,12 @@ class TestResolver:
             ]
         )
 
-        with patch("aiodns.DNSResolver", return_value=mock_new_resolver):
+        with patch(
+            "wormhole.resolver.aiodns.DNSResolver",
+            return_value=mock_new_resolver,
+        ) as mock_cls:
             result = await resolver_instance.resolve("example.com")
 
             # Should have recreated the resolver with the new loop
-            aiodns.DNSResolver.assert_called_once_with(loop=new_loop)
+            mock_cls.assert_called_once_with(loop=new_loop)
             assert "93.184.216.34" in result

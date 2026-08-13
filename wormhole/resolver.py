@@ -30,7 +30,7 @@ class Resolver:
         singleton instance. The aiodns.DNSResolver is created lazily.
         """
         if not Resolver._instance:
-            self.resolver: aiodns.DNSResolver | None = None
+            self._resolver: aiodns.DNSResolver | None = None
             self._resolver_loop: asyncio.AbstractEventLoop | None = None
             self.hosts_cache: dict[str, list[str]] = {}
             self.verbose: int = 0  # Verbosity level, configured separately
@@ -140,6 +140,23 @@ class Resolver:
                 )
             )
 
+    @property
+    def resolver(self) -> aiodns.DNSResolver | None:
+        return self._resolver
+
+    @resolver.setter
+    def resolver(self, value: aiodns.DNSResolver | None) -> None:
+        self._resolver = value
+        try:
+            self._resolver_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._resolver_loop = None
+
+    @resolver.deleter
+    def resolver(self) -> None:
+        self._resolver = None
+        self._resolver_loop = None
+
     async def resolve_with_ttl(self, hostname: str) -> tuple[list[str], int]:
         """
         Resolves a hostname to a list of IP addresses and the minimum TTL.
@@ -163,14 +180,12 @@ class Resolver:
         if self.resolver is None:
             loop = asyncio.get_running_loop()
             self.resolver = aiodns.DNSResolver(loop=loop)
-            self._resolver_loop = loop
         elif (
             self._resolver_loop is not None
             and asyncio.get_running_loop() is not self._resolver_loop
         ):
             loop = asyncio.get_running_loop()
             self.resolver = aiodns.DNSResolver(loop=loop)
-            self._resolver_loop = loop
 
         hostname_lower = hostname.lower()
         # 1. Check hosts file cache

@@ -86,6 +86,7 @@ async def _run_server_once(args: Namespace) -> bool:
     Returns:
         bool: True if the server should be restarted, False otherwise.
     """
+    should_restart = False
     if fastloop:
         logger.info(
             flm(
@@ -255,16 +256,12 @@ async def _run_server_once(args: Namespace) -> bool:
         # Cancel any remaining tasks
         for task in pending:
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
 
         # Check which event completed
         if restart_event.is_set():
             logger.info(
                 flm(
-                    "Network change detected. Restarting server with IPv6 support...",
+                    "Restart signal received, closing server for restart...",
                     ident={"id": "000000", "client": args.host},
                     verbose=args.verbose,
                 )
@@ -302,8 +299,8 @@ async def _run_server_once(args: Namespace) -> bool:
             # Reset events for restart
             shutdown_event.clear()
             restart_event.clear()
-            return True  # Signal to loop that restart is needed
-    return False
+            should_restart = True
+    return should_restart
 
 
 def main() -> int:
