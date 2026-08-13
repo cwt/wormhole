@@ -31,6 +31,7 @@ class Resolver:
         """
         if not Resolver._instance:
             self.resolver: aiodns.DNSResolver | None = None
+            self._resolver_loop: asyncio.AbstractEventLoop | None = None
             self.hosts_cache: dict[str, str] = {}
             self.verbose: int = 0  # Verbosity level, configured separately
             Resolver._instance = self
@@ -156,10 +157,18 @@ class Resolver:
         # Create a specific ident for this resolution request
         ident = {"id": "resolver", "client": hostname}
 
-        # Lazily initialize the resolver on first use to attach to the correct event loop.
+        # Lazily initialize or re-initialize the resolver if the event loop changed.
         if self.resolver is None:
             loop = asyncio.get_running_loop()
             self.resolver = aiodns.DNSResolver(loop=loop)
+            self._resolver_loop = loop
+        elif (
+            self._resolver_loop is not None
+            and asyncio.get_running_loop() is not self._resolver_loop
+        ):
+            loop = asyncio.get_running_loop()
+            self.resolver = aiodns.DNSResolver(loop=loop)
+            self._resolver_loop = loop
 
         hostname_lower = hostname.lower()
         # 1. Check hosts file cache

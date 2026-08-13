@@ -148,3 +148,31 @@ class TestResolver:
                 await resolver_instance.resolve("nonexistent.example.com")
 
             assert "Failed to resolve host" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_resolver_recreates_on_loop_change(self):
+        """Test that resolver recreates when event loop changes."""
+        resolver_instance = Resolver.get_instance()
+        resolver_instance.initialize(verbose=1)
+        resolver_instance.hosts_cache = {}
+
+        # Simulate a closed event loop by setting a fake old loop
+        old_loop = Mock()
+        resolver_instance._resolver_loop = old_loop
+        resolver_instance.resolver = AsyncMock()  # Old resolver
+
+        new_loop = asyncio.get_running_loop()
+        mock_new_resolver = AsyncMock()
+        mock_new_resolver.query = AsyncMock(
+            side_effect=[
+                [Mock(host="93.184.216.34", ttl=300)],
+                [Mock(host="2606:2800:220:1:248:1893:25c8:1946", ttl=600)],
+            ]
+        )
+
+        with patch("aiodns.DNSResolver", return_value=mock_new_resolver):
+            result = await resolver_instance.resolve("example.com")
+
+            # Should have recreated the resolver with the new loop
+            aiodns.DNSResolver.assert_called_once_with(loop=new_loop)
+            assert "93.184.216.34" in result
