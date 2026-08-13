@@ -33,7 +33,6 @@ ALLOW_LIST_SET: set[str] = DEFAULT_ALLOWLIST.copy()
 BLOCK_LIST_SET: set[str] = set()  # Custom blocklist from user file
 
 
-@lru_cache(maxsize=1)
 def has_public_ipv6() -> bool:
     """
     Checks if the current machine has a public, routable IPv6 address.

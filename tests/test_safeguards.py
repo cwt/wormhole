@@ -65,10 +65,6 @@ class TestSafeguards:
         """Test has_public_ipv6 when IPv6 is available."""
         # This test is complex to mock properly, so we'll just test that it doesn't crash
         # and returns a boolean value
-        from functools import lru_cache
-
-        has_public_ipv6.cache_clear()
-
         result = has_public_ipv6()
         assert isinstance(result, bool)
 
@@ -77,11 +73,6 @@ class TestSafeguards:
         """Test has_public_ipv6 when IPv6 is not available."""
         # Mock socket to simulate failed IPv6 connection
         mock_socket.side_effect = OSError("IPv6 not available")
-
-        # Clear the cache first
-        from functools import lru_cache
-
-        has_public_ipv6.cache_clear()
 
         result = has_public_ipv6()
         assert result is False
@@ -94,11 +85,6 @@ class TestSafeguards:
         mock_sock_instance.connect = Mock()
         mock_sock_instance.getsockname.return_value = ("::1", 80)  # loopback
         mock_socket.return_value = mock_sock_instance
-
-        # Clear the cache first
-        from functools import lru_cache
-
-        has_public_ipv6.cache_clear()
 
         result = has_public_ipv6()
         assert result is False

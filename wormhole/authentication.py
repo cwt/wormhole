@@ -11,8 +11,8 @@ REALM: str = "Wormhole Proxy"
 HASH_ALGORITHM = hashlib.sha256
 
 # Caches for performance
-_auth_file_cache: dict = {}
-_auth_file_mtime: float = 0.0
+_auth_file_cache: dict[str, dict] = {}  # path -> users dict
+_auth_file_mtime: dict[str, float] = {}  # path -> mtime
 
 # Nonce tracking for replay prevention
 _ISSUED_NONCES: dict[str, float] = {}  # nonce -> issue timestamp
@@ -55,20 +55,25 @@ def _load_auth_file(path: Path) -> dict | None:
     global _auth_file_cache, _auth_file_mtime
     try:
         current_mtime = path.stat().st_mtime
-        if current_mtime > _auth_file_mtime:
-            users = {}
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        user, realm, hash_val = line.strip().split(":", 2)
-                        users[user] = {"realm": realm, "hash": hash_val}
-                    except ValueError:
-                        continue  # Ignore malformed lines
-            _auth_file_cache = users
-            _auth_file_mtime = current_mtime
+        cached_path = str(path.resolve())
+        if (
+            cached_path in _auth_file_cache
+            and current_mtime == _auth_file_mtime.get(cached_path)
+        ):
+            return _auth_file_cache[cached_path]
+        users = {}
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    user, realm, hash_val = line.strip().split(":", 2)
+                    users[user] = {"realm": realm, "hash": hash_val}
+                except ValueError:
+                    continue  # Ignore malformed lines
+        _auth_file_cache[cached_path] = users
+        _auth_file_mtime[cached_path] = current_mtime
     except FileNotFoundError:
         return None
-    return _auth_file_cache
+    return _auth_file_cache.get(str(path.resolve()))
 
 
 # This regex handles quoted and unquoted values
