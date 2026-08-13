@@ -81,6 +81,25 @@ class TestRelayStream:
         assert result == b"HTTP/1.1 200 OK"
 
     @pytest.mark.asyncio
+    async def test_relay_stream_first_line_at_start_of_chunk(
+        self, mock_reader, mock_writer, context
+    ):
+        """Test that CRLF at byte index 0 is handled correctly."""
+        mock_reader.at_eof.side_effect = [False, True]
+        # CRLF is at the very start of the chunk
+        mock_reader.read.side_effect = [
+            b"\r\nContent-Type: text/plain\r\n\r\ndata",
+            b"",
+        ]
+
+        result = await relay_stream(
+            mock_reader, mock_writer, context, return_first_line=True
+        )
+
+        # Should capture the empty first line (CRLF at index 0)
+        assert result == b""
+
+    @pytest.mark.asyncio
     async def test_relay_stream_empty_data(
         self, mock_reader, mock_writer, context
     ):

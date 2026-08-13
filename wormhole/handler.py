@@ -66,7 +66,7 @@ async def relay_stream(
                 break
 
             if return_first_line and first_line is None:
-                if end_of_line := data.find(b"\r\n"):
+                if (end_of_line := data.find(b"\r\n")) != -1:
                     first_line = data[:end_of_line]
 
             writer.write(data)
