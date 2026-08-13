@@ -206,22 +206,18 @@ async def start_wormhole_server(
         if dual_stack and host in ("0.0.0.0", "::"):
             # Try to create a dual-stack server that listens on both IPv4 and IPv6
             try:
-                # For dual-stack, we use IPv6 family but with IPV6_V6ONLY disabled
+                # Create socket first, set IPV6_V6ONLY before binding
+                sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((host, port))
+                sock.listen(128)
+
                 server = await asyncio.start_server(
                     connection_handler,
-                    host,
-                    port,
-                    family=socket.AF_INET6,
-                    flags=socket.AI_PASSIVE,
+                    sock=sock,
                     limit=262144,
                 )
-
-                # Set IPV6_V6ONLY to False for dual-stack support
-                for sock in server.sockets:
-                    if sock.family == socket.AF_INET6:
-                        sock.setsockopt(
-                            socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
-                        )
 
                 # Log the addresses the server is listening on.
                 for s in server.sockets:

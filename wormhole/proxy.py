@@ -73,6 +73,19 @@ async def main_async(args: Namespace) -> None:
     Returns:
         None
     """
+    # Use a loop instead of recursion to avoid stack overflow on repeated restarts
+    while True:
+        should_restart = await _run_server_once(args)
+        if not should_restart:
+            break
+
+
+async def _run_server_once(args: Namespace) -> bool:
+    """Run a single server instance (called in a loop for restarts).
+
+    Returns:
+        bool: True if the server should be restarted, False otherwise.
+    """
     if fastloop:
         logger.info(
             flm(
@@ -289,8 +302,8 @@ async def main_async(args: Namespace) -> None:
             # Reset events for restart
             shutdown_event.clear()
             restart_event.clear()
-            # Recursively call main_async for restart
-            await main_async(args)
+            return True  # Signal to loop that restart is needed
+    return False
 
 
 def main() -> int:
