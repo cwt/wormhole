@@ -46,7 +46,7 @@ packages = [{include = "wormhole"}]
 
 [tool.poetry.dependencies]
 aiodns = "^4.0"
-aiohttp = "^3.12"
+aiohttp = "^3.14"
 aiosqlite = "^0.22"
 loguru = "^0.7"
 # The python version is now specified in [project].requires-python
