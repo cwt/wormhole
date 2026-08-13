@@ -57,6 +57,19 @@ async def handle_connection(
     context = RequestContext(ident, verbose)
 
     CURRENT_TASKS += 1
+    if CURRENT_TASKS > MAX_TASKS:
+        logger.warning(
+            flm(
+                f"Connection rejected: {CURRENT_TASKS}/{MAX_TASKS} tasks active",
+                context.ident,
+                context.verbose,
+            )
+        )
+        CURRENT_TASKS -= 1
+        client_writer.write(b"HTTP/1.1 503 Service Unavailable\r\n\r\n")
+        await client_writer.drain()
+        return
+
     if context.verbose > 0:
         logger.debug(
             flm(

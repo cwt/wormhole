@@ -31,6 +31,11 @@ class TestAdBlocker:
         assert match
         assert match.group(2) == "example.com"
 
+        # Test Adblock Plus format with options
+        match = DOMAIN_REGEX.match("||example.com^$third-party")
+        assert match
+        assert match.group(2) == "example.com"
+
         # Test simple domain
         match = DOMAIN_REGEX.match("example.com")
         assert match is None  # This should not match the regex
@@ -51,6 +56,16 @@ subdomain.example.org
         assert "subdomain.example.org" in domains
         # Comments and empty lines should be ignored
         assert len(domains) == 3
+
+    def test_filter_redundant_domains_ascending(self):
+        """Test that shortest domains are kept and subdomains removed."""
+        domains = {"a.b.c.com", "b.c.com", "c.com", "x.y.z.com"}
+        result = _filter_redundant_domains(domains)
+        # Only top-level domains should remain
+        assert "c.com" in result
+        assert "b.c.com" not in result
+        assert "a.b.c.com" not in result
+        assert "x.y.z.com" in result  # No parent in set
 
     def test_parse_domains_from_content_with_comments(self):
         """Test parsing domains while ignoring comments and empty lines."""

@@ -259,3 +259,37 @@ class TestStartWormholeServer:
                         verbose=0,
                         allow_private=False,
                     )
+
+    @pytest.mark.asyncio
+    async def test_handle_connection_rejects_over_max_tasks(self):
+        """Test that connections are rejected when MAX_TASKS is exceeded."""
+        import wormhole.server as server_module
+
+        mock_reader = AsyncMock()
+        mock_writer = Mock()
+        mock_writer.is_closing.return_value = False
+        mock_writer.close = Mock()
+        mock_writer.wait_closed = AsyncMock()
+        mock_writer.get_extra_info.return_value = ("127.0.0.1", 12345)
+        mock_writer.write = Mock()
+        mock_writer.drain = AsyncMock()
+
+        # Save original values
+        orig_max = server_module.MAX_TASKS
+        orig_current = server_module.CURRENT_TASKS
+
+        try:
+            # Set MAX_TASKS=1 and CURRENT_TASKS=1 so next connection exceeds limit
+            server_module.MAX_TASKS = 1
+            server_module.CURRENT_TASKS = 1
+
+            await handle_connection(
+                mock_reader, mock_writer, auth_file_path=None, verbose=0
+            )
+
+            # Should have written 503 response
+            call_args = mock_writer.write.call_args[0][0]
+            assert b"503 Service Unavailable" in call_args
+        finally:
+            server_module.MAX_TASKS = orig_max
+            server_module.CURRENT_TASKS = orig_current

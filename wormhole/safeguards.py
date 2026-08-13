@@ -234,16 +234,18 @@ def is_ad_domain(hostname: str) -> bool:
     # This blocks subdomains of a blocked parent (e.g., if 'example.com'
     # is in custom blocklist, 'subdomain.example.com' will also be blocked).
     parts = hostname_lower.split(".")
-    for i in range(1, len(parts)):
-        parent_domain = ".".join(parts[i:])
+    # Compute parent domains once to avoid triplicated splitting
+    parent_domains: list[str] = [
+        ".".join(parts[i:]) for i in range(1, len(parts))
+    ]
+    for parent_domain in parent_domains:
         if parent_domain in BLOCK_LIST_SET:
             return True
 
     # --- Fifth Priority: Check for parent domains in the ad blocklist ---
     # This blocks subdomains of a blocked parent (e.g., if 'ad-server.com'
     # is blocked, 'analytics.ad-server.com' will also be blocked).
-    for i in range(1, len(parts)):
-        parent_domain = ".".join(parts[i:])
+    for parent_domain in parent_domains:
         if parent_domain in AD_BLOCK_SET:
             return True
 
@@ -251,10 +253,22 @@ def is_ad_domain(hostname: str) -> bool:
     # This allows subdomains of an allowed parent (e.g., if 'x.com' is
     # allowed, 'www.x.com' will also be allowed), unless the subdomain
     # itself was caught by the blocklist checks above.
-    for i in range(1, len(parts)):
-        parent_domain = ".".join(parts[i:])
+    for parent_domain in parent_domains:
         if parent_domain in ALLOW_LIST_SET:
             return False
 
     # Default to not blocking if no specific rules match
     return False
+    # This blocks subdomains of a blocked parent (e.g., if 'ad-server.com'
+    # is blocked, 'analytics.ad-server.com' will also be blocked).
+    for parent_domain in parent_domains:
+        if parent_domain in AD_BLOCK_SET:
+            return True
+
+    # --- Sixth Priority: Check for parent domains in the allowlist ---
+    # This allows subdomains of an allowed parent (e.g., if 'x.com' is
+    # allowed, 'www.x.com' will also be allowed), unless the subdomain
+    # itself was caught by the blocklist checks above.
+    for parent_domain in parent_domains:
+        if parent_domain in ALLOW_LIST_SET:
+            return False

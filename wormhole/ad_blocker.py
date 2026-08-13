@@ -20,6 +20,8 @@ BLOCKLIST_URLS: list[str] = [
 DOMAIN_REGEX = re.compile(
     r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}\s+([a-zA-Z0-9.-]+)|"  # For hosts file format
     r"^\|\|([a-zA-Z0-9.-]+)\^"  # For Adblock Plus format
+    r"(?:\$[^']*)?$",  # Optional options suffix (e.g. $third-party)
+    re.IGNORECASE,
 )
 
 
@@ -109,19 +111,21 @@ def _filter_redundant_domains(domains: set[str]) -> set[str]:
     Returns:
         set[str]: A set of optimized domain names with redundant subdomains removed.
     """
-    # Sort by length descending to ensure we process subdomains before parents
-    sorted_domains: list[str] = sorted(list(domains), key=len, reverse=True)
-    optimized_set: set[str] = set(sorted_domains)
+    # Sort by length ascending so parents are processed before subdomains
+    sorted_domains: list[str] = sorted(domains, key=len)
+    optimized_set: set[str] = set()
 
     for domain in sorted_domains:
         parts = domain.split(".")
-        # Check for parents of the current domain
+        # Check if any parent domain is already in the optimized set
+        is_redundant = False
         for i in range(1, len(parts) - 1):
             parent = ".".join(parts[i:])
             if parent in optimized_set:
-                # If a parent domain exists in the set, this subdomain is redundant.
-                optimized_set.discard(domain)
-                break  # Found a parent, no need to check further.
+                is_redundant = True
+                break
+        if not is_redundant:
+            optimized_set.add(domain)
 
     return optimized_set
 
