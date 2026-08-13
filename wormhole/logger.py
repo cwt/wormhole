@@ -93,6 +93,19 @@ class LogThrottler:
 
 # In loguru, the logger is imported and ready to be configured.
 # We just need to ensure other modules import this configured instance.
+# Track current throttler instances for cleanup on re-setup.
+_active_throttlers: list[LogThrottler] = []
+
+
+def _cancel_active_throttlers() -> None:
+    """Cancel any pending timer handles on active LogThrottler instances."""
+    for throttler in _active_throttlers:
+        if throttler.timer:
+            throttler.timer.cancel()
+            throttler.timer = None
+    _active_throttlers.clear()
+
+
 def setup_logger(
     syslog_host: str | None = None,
     syslog_port: int = 514,
@@ -154,9 +167,11 @@ def setup_logger(
 
     # Only enable the async LogThrottler if we are in async mode.
     if async_mode and verbose < 2:
-        logger.info = LogThrottler(logger, "info").process  # type: ignore
-        logger.warning = LogThrottler(logger, "warning").process  # type: ignore
-        logger.error = LogThrottler(logger, "error").process  # type: ignore
+        _cancel_active_throttlers()
+        for level_name in ("info", "warning", "error"):
+            throttler = LogThrottler(logger, level_name)
+            _active_throttlers.append(throttler)
+            setattr(logger, level_name, throttler.process)  # type: ignore[misc]
 
 
 def format_log_message(

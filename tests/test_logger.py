@@ -132,6 +132,35 @@ class TestSetupLogger:
             mock_uname.return_value.nodename = "testhost"
             setup_logger(syslog_host="syslog.example.com")
 
+    def test_setup_logger_cancels_old_timers(self):
+        """Test that repeated setup_logger cancels old timer handles."""
+        from wormhole.logger import _active_throttlers
+
+        # First setup creates throttlers with active timers
+        with (
+            patch("wormhole.logger.logger.remove"),
+            patch("wormhole.logger.logger.add"),
+            patch("wormhole.logger.logging.getLogger"),
+        ):
+            setup_logger(async_mode=True, verbose=0)
+
+        # Simulate active timers on the throttlers
+        for throttler in _active_throttlers:
+            throttler.timer = Mock()
+
+        # Second setup should cancel the old timers and create new throttlers
+        with (
+            patch("wormhole.logger.logger.remove"),
+            patch("wormhole.logger.logger.add"),
+            patch("wormhole.logger.logging.getLogger"),
+        ):
+            setup_logger(async_mode=True, verbose=0)
+
+        # New throttlers should exist with no pending timers
+        assert len(_active_throttlers) == 3
+        for throttler in _active_throttlers:
+            assert throttler.timer is None
+
 
 class TestFormatLogMessage:
     """Test cases for the format_log_message function."""
