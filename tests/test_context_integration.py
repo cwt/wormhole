@@ -2,6 +2,7 @@
 """
 Integration tests for the RequestContext usage in the handler module.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

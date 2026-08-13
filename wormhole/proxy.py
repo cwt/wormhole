@@ -23,6 +23,7 @@ from types import ModuleType
 import asyncio
 import signal
 
+
 def select_event_loop():
     """Select the best available asyncio event loop implementation.
 
@@ -43,14 +44,17 @@ def select_event_loop():
     ):
         try:
             import talyn
+
             return talyn
         except ImportError:
             pass
     try:
         if sys.platform == "win32":
             import winloop
+
             return winloop
         import uvloop
+
         return uvloop
     except ImportError:
         return None
@@ -433,6 +437,7 @@ def main() -> int:
     # (e.g. Talyn raises while creating its loop in this environment).
     def _run_async(coro_factory) -> None:
         started = False
+
         async def wrap_coro():
             nonlocal started
             started = True
@@ -468,10 +473,12 @@ def main() -> int:
     if args.update_ad_block_db:
         # For this standalone utility, configure a simple logger to show progress.
         logger.info(f"Updating ad-block database at: {args.update_ad_block_db}")
+
         def run_update():
             return update_database(
                 args.update_ad_block_db, args.allowlist, args.blocklist
             )
+
         try:
             _run_async(run_update)
         except Exception as e:
@@ -488,6 +495,7 @@ def main() -> int:
 
     def run_main():
         return main_async(args)
+
     try:
         _run_async(run_main)
     except KeyboardInterrupt:

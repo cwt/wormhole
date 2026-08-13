@@ -2,6 +2,7 @@
 """
 Unit tests for the _resolve_and_validate_host function.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

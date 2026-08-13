@@ -2,10 +2,12 @@
 """
 Unit tests for the authentication module.
 """
+
 import pytest
 import asyncio
 import tempfile
 import os
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 from wormhole.authentication import (
@@ -251,7 +253,8 @@ class TestAuthentication:
     @pytest.mark.asyncio
     async def test_verify_credentials_user_not_found(self):
         """Test verify_credentials when user is not found."""
-        # Create mock reader and writer
+        from wormhole.authentication import _ISSUED_NONCES
+
         mock_reader = AsyncMock(spec=asyncio.StreamReader)
         mock_writer = AsyncMock(spec=asyncio.StreamWriter)
 
@@ -262,34 +265,44 @@ class TestAuthentication:
             tmp_path = tmp.name
 
         try:
-            # Create a valid-looking auth header for a different user
-            auth_header = (
-                "Proxy-Authorization: Digest "
-                'username="testuser", '
-                f'realm="{REALM}", '
-                'nonce="abc123", '
-                'uri="/", '
-                'response="invalidresponse"'
-            )
+            # Pre-seed a valid nonce so the test reaches the user lookup
+            _ISSUED_NONCES["abc123"] = time.time()
 
-            # Call verify_credentials
-            result = await verify_credentials(
-                mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
-            )
+            try:
+                # Create a valid-looking auth header for a different user
+                auth_header = (
+                    "Proxy-Authorization: Digest "
+                    'username="testuser", '
+                    f'realm="{REALM}", '
+                    'nonce="abc123", '
+                    'uri="/", '
+                    'qop="auth", '
+                    'nc="00000001", '
+                    'cnonce="xyz789", '
+                    'response="invalidresponse"'
+                )
 
-            # Should return None
-            assert result is None
+                # Call verify_credentials
+                result = await verify_credentials(
+                    mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
+                )
 
-            # Should have sent an auth required response
-            mock_writer.write.assert_called_once()
-            mock_writer.drain.assert_awaited_once()
+                # Should return None
+                assert result is None
+
+                # Should have sent an auth required response
+                mock_writer.write.assert_called_once()
+                mock_writer.drain.assert_awaited_once()
+            finally:
+                _ISSUED_NONCES.pop("abc123", None)
         finally:
             os.remove(tmp_path)
 
     @pytest.mark.asyncio
     async def test_verify_credentials_valid_credentials(self):
         """Test verify_credentials with valid credentials."""
-        # Create mock reader and writer
+        from wormhole.authentication import _ISSUED_NONCES, _USED_NONCES
+
         mock_reader = AsyncMock(spec=asyncio.StreamReader)
         mock_writer = AsyncMock(spec=asyncio.StreamWriter)
         mock_writer.get_extra_info.return_value = ("192.168.1.100", 12345)
@@ -322,45 +335,57 @@ class TestAuthentication:
                 'response="calculatedresponse"'
             )
 
-            # Calculate the expected response
-            ha2_data = f"CONNECT:/".encode("utf-8")
-            ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
-            response_data = f"{ha1}:abc123:00000001:xyz789:auth:{ha2}".encode(
-                "utf-8"
-            )
-            expected_response = HASH_ALGORITHM(response_data).hexdigest()
+            # Pre-seed the nonce as issued (but not yet used)
+            _ISSUED_NONCES["abc123"] = time.time()
 
-            # Update the auth header with the correct response
-            auth_header = auth_header.replace(
-                'response="calculatedresponse"',
-                f'response="{expected_response}"',
-            )
+            try:
+                # Calculate the expected response
+                ha2_data = f"CONNECT:/".encode("utf-8")
+                ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
+                response_data = (
+                    f"{ha1}:abc123:00000001:xyz789:auth:{ha2}".encode("utf-8")
+                )
+                expected_response = HASH_ALGORITHM(response_data).hexdigest()
 
-            # Patch secrets.compare_digest to return True for our test
-            with patch(
-                "wormhole.authentication.secrets.compare_digest",
-                return_value=True,
-            ):
-                # Call verify_credentials
-                result = await verify_credentials(
-                    mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
+                # Update the auth header with the correct response
+                auth_header = auth_header.replace(
+                    'response="calculatedresponse"',
+                    f'response="{expected_response}"',
                 )
 
-                # Should return an ident dictionary
-                assert result is not None
-                assert "id" in result
-                assert result["client"] == f"{username}@192.168.1.100"
+                # Patch secrets.compare_digest to return True for our test
+                with patch(
+                    "wormhole.authentication.secrets.compare_digest",
+                    return_value=True,
+                ):
+                    # Call verify_credentials
+                    result = await verify_credentials(
+                        mock_reader,
+                        mock_writer,
+                        "CONNECT",
+                        [auth_header],
+                        tmp_path,
+                    )
 
-                # Writer should not have been called to send auth required response
-                mock_writer.write.assert_not_called()
-                mock_writer.drain.assert_not_called()
+                    # Should return an ident dictionary
+                    assert result is not None
+                    assert "id" in result
+                    assert result["client"] == f"{username}@192.168.1.100"
+
+                    # Writer should not have been called to send auth required response
+                    mock_writer.write.assert_not_called()
+                    mock_writer.drain.assert_not_called()
+            finally:
+                _ISSUED_NONCES.pop("abc123", None)
+                _USED_NONCES.discard(("abc123", "00000001", "xyz789"))
         finally:
             os.remove(tmp_path)
 
     @pytest.mark.asyncio
     async def test_verify_credentials_invalid_credentials(self):
         """Test verify_credentials with invalid credentials."""
-        # Create mock reader and writer
+        from wormhole.authentication import _ISSUED_NONCES
+
         mock_reader = AsyncMock(spec=asyncio.StreamReader)
         mock_writer = AsyncMock(spec=asyncio.StreamWriter)
 
@@ -371,26 +396,119 @@ class TestAuthentication:
             tmp_path = tmp.name
 
         try:
-            # Create an auth header with incorrect credentials
+            # Pre-seed a valid nonce so the test reaches the response comparison
+            _ISSUED_NONCES["abc123"] = time.time()
+
+            try:
+                # Create an auth header with incorrect credentials
+                auth_header = (
+                    "Proxy-Authorization: Digest "
+                    'username="testuser", '
+                    f'realm="{REALM}", '
+                    'nonce="abc123", '
+                    'uri="/", '
+                    'response="invalidresponse"'
+                )
+
+                # Call verify_credentials
+                result = await verify_credentials(
+                    mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
+                )
+
+                # Should return None
+                assert result is None
+
+                # Should have sent an auth required response
+                mock_writer.write.assert_called_once()
+                mock_writer.drain.assert_awaited_once()
+            finally:
+                _ISSUED_NONCES.pop("abc123", None)
+        finally:
+            os.remove(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_verify_credentials_replayed_nonce(self):
+        """Test that replaying a nonce (same nc+cnonce) is rejected."""
+        from wormhole.authentication import _ISSUED_NONCES, _USED_NONCES
+
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.get_extra_info.return_value = ("192.168.1.100", 12345)
+
+        username = "testuser"
+        password = "testpassword"
+        ha1_data = f"{username}:{REALM}:{password}".encode("utf-8")
+        ha1 = HASH_ALGORITHM(ha1_data).hexdigest()
+        content = f"{username}:{REALM}:{ha1}\n"
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            auth_header = (
+                "Proxy-Authorization: Digest "
+                f'username="{username}", '
+                f'realm="{REALM}", '
+                'nonce="replay-me", '
+                'uri="/", '
+                'qop="auth", '
+                'nc="00000001", '
+                'cnonce="xyz789", '
+                'response="dummy"'
+            )
+
+            # Pre-seed with a RECENT timestamp so it survives cleanup
+            _ISSUED_NONCES["replay-me"] = time.time()
+            _USED_NONCES.add(("replay-me", "00000001", "xyz789"))
+
+            try:
+                result = await verify_credentials(
+                    mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
+                )
+                assert result is None
+                mock_writer.write.assert_called_once()
+            finally:
+                _USED_NONCES.discard(("replay-me", "00000001", "xyz789"))
+                _ISSUED_NONCES.pop("replay-me", None)
+        finally:
+            os.remove(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_verify_credentials_expired_nonce(self):
+        """Test that an expired nonce is rejected."""
+        from wormhole.authentication import _ISSUED_NONCES
+
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+
+        content = "testuser:testrealm:testhash\n"
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
             auth_header = (
                 "Proxy-Authorization: Digest "
                 'username="testuser", '
                 f'realm="{REALM}", '
-                'nonce="abc123", '
+                'nonce="old-nonce", '
                 'uri="/", '
-                'response="invalidresponse"'
+                'qop="auth", '
+                'nc="00000001", '
+                'cnonce="xyz789", '
+                'response="dummy"'
             )
 
-            # Call verify_credentials
-            result = await verify_credentials(
-                mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
-            )
+            # Pre-seed an expired nonce (older than TTL)
+            _ISSUED_NONCES["old-nonce"] = time.time() - 600  # 10 minutes ago
 
-            # Should return None
-            assert result is None
-
-            # Should have sent an auth required response
-            mock_writer.write.assert_called_once()
-            mock_writer.drain.assert_awaited_once()
+            try:
+                result = await verify_credentials(
+                    mock_reader, mock_writer, "CONNECT", [auth_header], tmp_path
+                )
+                assert result is None
+                mock_writer.write.assert_called_once()
+            finally:
+                _ISSUED_NONCES.pop("old-nonce", None)
         finally:
             os.remove(tmp_path)

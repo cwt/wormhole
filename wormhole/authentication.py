@@ -1,8 +1,10 @@
 from pathlib import Path
+from .logger import logger
 import asyncio
 import hashlib
 import re
 import secrets
+import time
 
 # This must match the REALM in auth_manager.py
 REALM: str = "Wormhole Proxy"
@@ -11,6 +13,11 @@ HASH_ALGORITHM = hashlib.sha256
 # Caches for performance
 _auth_file_cache: dict = {}
 _auth_file_mtime: float = 0.0
+
+# Nonce tracking for replay prevention
+_ISSUED_NONCES: dict[str, float] = {}  # nonce -> issue timestamp
+_USED_NONCES: set[tuple[str, str, str]] = set()  # (nonce, nc, cnonce)
+_NONCE_TTL: float = 300.0  # 5 minutes
 
 
 def get_ident(
@@ -92,6 +99,7 @@ async def send_auth_required_response(writer: asyncio.StreamWriter) -> None:
     """
     nonce = secrets.token_hex(16)
     opaque = secrets.token_hex(16)
+    _ISSUED_NONCES[nonce] = time.time()
     # qop="auth" means quality of protection is authentication.
     challenge = (
         f'Digest realm="{REALM}", '
@@ -151,27 +159,50 @@ async def verify_credentials(
         params = _parse_digest_header(auth_header_val)
         username = params["username"]
 
-        # 3. Look up the user and their stored HA1 hash
+        # 3. Validate nonce: must be issued, not expired, and not replayed
+        nonce = params["nonce"]
+        nc = params["nc"]
+        cnonce = params["cnonce"]
+
+        # Clean up expired nonces
+        now = time.time()
+        _expired_keys = [
+            n for n, t in _ISSUED_NONCES.items() if now - t >= _NONCE_TTL
+        ]
+        for _k in _expired_keys:
+            del _ISSUED_NONCES[_k]
+
+        if nonce not in _ISSUED_NONCES:
+            logger.debug("Nonce not recognised or expired")
+            await send_auth_required_response(writer)
+            return None
+
+        if (nonce, nc, cnonce) in _USED_NONCES:
+            logger.warning("Replayed nonce detected")
+            await send_auth_required_response(writer)
+            return None
+
+        # 4. Look up the user and their stored HA1 hash
         user_data = users.get(username)
         if not user_data:
             await send_auth_required_response(writer)
             return None
         ha1 = user_data["hash"]
 
-        # 4. Calculate HA2 on the server using the URI *from the auth header*
+        # 5. Calculate HA2 on the server using the URI *from the auth header*
         ha2_data = f"{method}:{params['uri']}".encode("utf-8")
         ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
 
-        # 5. Calculate the expected response hash
+        # 6. Calculate the expected response hash
         response_data = (
             f'{ha1}:{params["nonce"]}:{params["nc"]}:{params["cnonce"]}:'
             f'{params["qop"]}:{ha2}'
         ).encode("utf-8")
         valid_response = HASH_ALGORITHM(response_data).hexdigest()
 
-        # 6. Compare the client's response with our calculated one
+        # 7. Compare the client's response with our calculated one
         if secrets.compare_digest(valid_response, params["response"]):
-            # Success!
+            _USED_NONCES.add((nonce, nc, cnonce))
             return get_ident(reader, writer, user=username)
 
     except (KeyError, IndexError):

@@ -2,6 +2,7 @@
 """
 Additional unit tests for the _create_fastest_connection function error conditions.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

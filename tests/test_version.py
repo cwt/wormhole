@@ -2,6 +2,7 @@
 """
 Unit tests for the version module.
 """
+
 import pytest
 from wormhole.version import VERSION
 

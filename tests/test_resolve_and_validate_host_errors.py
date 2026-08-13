@@ -2,6 +2,7 @@
 """
 Additional unit tests for the _resolve_and_validate_host function error conditions.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

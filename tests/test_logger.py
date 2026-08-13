@@ -2,6 +2,7 @@
 """
 Unit tests for the logger module.
 """
+
 import pytest
 import asyncio
 from unittest.mock import Mock, patch, MagicMock

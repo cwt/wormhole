@@ -2,6 +2,7 @@
 """
 Unit tests for the _create_fastest_connection function.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

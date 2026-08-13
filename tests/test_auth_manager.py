@@ -2,6 +2,7 @@
 """
 Unit tests for the auth_manager module.
 """
+
 import pytest
 import tempfile
 import os

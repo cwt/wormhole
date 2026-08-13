@@ -2,6 +2,7 @@
 """
 Unit tests for the ad_blocker module.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch, mock_open

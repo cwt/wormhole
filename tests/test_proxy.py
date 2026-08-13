@@ -2,6 +2,7 @@
 """
 Unit tests for the proxy module.
 """
+
 import pytest
 import sys
 import asyncio
@@ -298,8 +299,10 @@ class TestMain:
 
                 # Mock Path properly
                 mock_path_instance = MagicMock()
+
                 def mock_div(self, other):
                     return MagicMock()
+
                 mock_path_instance.__truediv__ = mock_div
                 mock_path_instance.read_text.return_value = "License text"
                 mock_path.return_value = mock_path_instance
@@ -608,7 +611,9 @@ class TestMain:
                 patch("wormhole.proxy.fastloop") as mock_fastloop,
                 patch("wormhole.proxy.setup_logger") as mock_setup_logger,
                 patch("wormhole.proxy.asyncio.run") as mock_asyncio_run,
-                patch("wormhole.proxy.asyncio.set_event_loop_policy") as mock_set_policy,
+                patch(
+                    "wormhole.proxy.asyncio.set_event_loop_policy"
+                ) as mock_set_policy,
             ):
                 # uvloop.run raises -> must fall back to asyncio.run().
                 mock_fastloop.run = Mock(side_effect=_boom)
@@ -616,10 +621,20 @@ class TestMain:
 
                 mock_args = Mock()
                 for attr in (
-                    "license", "auth_add", "auth_mod", "auth_del",
-                    "update_ad_block_db", "host", "port", "syslog_host",
-                    "syslog_port", "verbose", "auth", "allowlist",
-                    "ad_block_db", "allow_private",
+                    "license",
+                    "auth_add",
+                    "auth_mod",
+                    "auth_del",
+                    "update_ad_block_db",
+                    "host",
+                    "port",
+                    "syslog_host",
+                    "syslog_port",
+                    "verbose",
+                    "auth",
+                    "allowlist",
+                    "ad_block_db",
+                    "allow_private",
                 ):
                     setattr(mock_args, attr, None)
                 mock_args.host = "127.0.0.1"
@@ -651,7 +666,16 @@ class TestEventLoopSelection:
     """
 
     @contextmanager
-    def _patched_selection(self, platform_name, machine, version, *, talyn=None, uvloop=None, winloop=None):
+    def _patched_selection(
+        self,
+        platform_name,
+        machine,
+        version,
+        *,
+        talyn=None,
+        uvloop=None,
+        winloop=None,
+    ):
         # Control availability of the optional loop packages via sys.modules:
         #   True  -> inject a dummy module so `import` succeeds
         #   False -> mark it unavailable so `import` raises ImportError
@@ -681,7 +705,9 @@ class TestEventLoopSelection:
 
     def test_linux_x86_64_py314_selects_talyn(self):
         """Linux x86_64 + CPython 3.13/3.14 -> Talyn is selected."""
-        with self._patched_selection("linux", "x86_64", (3, 14, 0, "final", 0), talyn=True) as uv:
+        with self._patched_selection(
+            "linux", "x86_64", (3, 14, 0, "final", 0), talyn=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "talyn"
 
@@ -695,36 +721,48 @@ class TestEventLoopSelection:
 
     def test_linux_riscv64_py314_selects_talyn(self):
         """Linux riscv64 + CPython 3.13/3.14 -> Talyn is selected."""
-        with self._patched_selection("linux", "riscv64", (3, 14, 0, "final", 0), talyn=True) as uv:
+        with self._patched_selection(
+            "linux", "riscv64", (3, 14, 0, "final", 0), talyn=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "talyn"
 
     def test_linux_unsupported_arch_skips_talyn(self):
         """Linux on an unsupported arch (e.g. ppc64le) skips Talyn and uses uvloop."""
-        with self._patched_selection("linux", "ppc64le", (3, 14, 0, "final", 0), uvloop=True) as uv:
+        with self._patched_selection(
+            "linux", "ppc64le", (3, 14, 0, "final", 0), uvloop=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "uvloop"
 
     def test_linux_wrong_python_version_skips_talyn(self):
         """Linux on CPython < 3.13 or > 3.14 skips Talyn and uses uvloop."""
-        with self._patched_selection("linux", "x86_64", (3, 12, 0, "final", 0), uvloop=True) as uv:
+        with self._patched_selection(
+            "linux", "x86_64", (3, 12, 0, "final", 0), uvloop=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "uvloop"
 
     def test_windows_selects_winloop(self):
         """Windows selects Winloop (no arch/version guards)."""
-        with self._patched_selection("win32", "AMD64", (3, 14, 0, "final", 0), winloop=True) as uv:
+        with self._patched_selection(
+            "win32", "AMD64", (3, 14, 0, "final", 0), winloop=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "winloop"
 
     def test_windows_winloop_import_fails_falls_back_to_none(self):
         """Winloop import failure on Windows falls back to stdlib asyncio."""
-        with self._patched_selection("win32", "AMD64", (3, 14, 0, "final", 0), winloop=False) as uv:
+        with self._patched_selection(
+            "win32", "AMD64", (3, 14, 0, "final", 0), winloop=False
+        ) as uv:
             assert uv is None
 
     def test_other_platform_uses_uvloop(self):
         """Non-Linux, non-Windows platforms use uvloop."""
-        with self._patched_selection("darwin", "x86_64", (3, 14, 0, "final", 0), uvloop=True) as uv:
+        with self._patched_selection(
+            "darwin", "x86_64", (3, 14, 0, "final", 0), uvloop=True
+        ) as uv:
             assert uv is not None
             assert uv.__name__ == "uvloop"
 

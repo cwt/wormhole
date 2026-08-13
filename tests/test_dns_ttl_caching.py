@@ -2,6 +2,7 @@
 """
 Unit tests for DNS TTL-based caching functionality.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch

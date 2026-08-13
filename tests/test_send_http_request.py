@@ -2,6 +2,7 @@
 """
 Unit tests for the _send_http_request function.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
