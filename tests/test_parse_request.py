@@ -86,3 +86,18 @@ class TestParseRequest:
 
         # Should return None for all values
         assert result == (None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_parse_request_payload_too_large(self, mock_reader, context):
+        """Test that oversized Content-Length is rejected."""
+        headers_data = (
+            b"POST /test HTTP/1.1\r\nHost: example.com\r\n"
+            b"Content-Length: 999999999\r\n\r\n"
+        )
+        mock_reader.readuntil = AsyncMock(return_value=headers_data)
+
+        result = await parse_request(mock_reader, context)
+
+        # Should return None because payload exceeds max size
+        assert result == (None, None, None)
+        mock_reader.readexactly.assert_not_called()
