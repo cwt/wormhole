@@ -62,26 +62,19 @@ You can install the **development snapshot** from the **main** branch on GitHub 
 $ pip install git+https://github.com/cwt/wormhole.git@main
 ```
 
-You can also install the **development snapshot** using `pip` with
-`mercurial`:
-
-```shell
-$ pip install hg+https://hg.sr.ht/~cwt/wormhole
-```
-
 Or install from your local clone:
 
 ```shell
-$ hg clone https://hg.sr.ht/~cwt/wormhole
+$ git clone https://github.com/cwt/wormhole.git
 $ cd wormhole/
 $ pip install -e .
 ```
 
-You can also install the latest `tip` snapshot using the following
+You can also install the latest snapshot from the main branch using the following
 command:
 
 ```shell
-$ pip install https://hg.sr.ht/~cwt/wormhole/archive/tip.tar.gz
+$ pip install https://github.com/cwt/wormhole/archive/refs/heads/main.tar.gz
 ```
 
 -----
@@ -311,3 +304,5 @@ MIT License (included in the source distribution)
 
   - This project is forked and converted to Mercurial from
     [WARP](https://github.com/devunt/warp) on GitHub.
+  - Now we are back on GitHub again.
+
