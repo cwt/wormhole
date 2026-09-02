@@ -29,7 +29,7 @@ dynamic = ["dependencies"]
 
 # Standard URLs section
 [project.urls]
-Homepage = "https://hg.sr.ht/~cwt/wormhole"
+Homepage = "https://github.com/cwt/wormhole"
 
 # Standard section for console scripts
 [project.scripts]
