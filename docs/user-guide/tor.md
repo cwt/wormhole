@@ -96,8 +96,8 @@ Hostnames are passed to the SOCKS proxy untouched (remote DNS), so `.onion`
 addresses work without any explicit configuration:
 
 ```bash
-curl -x http://127.0.0.1:8800 \
-  http://juhanurmihxlp77nkq76byazcldy2hlmovfu2epvl5ankdibsot4csyd.onion/
+curl -L -x http://127.0.0.1:8800 \
+  https://www.bbcnewsd73hkzno2ini43t4gblxvycyac5aw4gnv7t2rccijh7745uqd.onion/
 ```
 
 The first visit to an onion service can take a couple of minutes while Tor
