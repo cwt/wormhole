@@ -18,8 +18,9 @@ DNS_CACHE_MAX_SIZE: int = 10_000  # Max cached hosts before LRU eviction
 # --- Max Payload Size ---
 MAX_CONTENT_LENGTH: int = 10 * 1024 * 1024  # 10 MB
 
-# --- Stream Relay Timeout ---
+# --- Stream Relay Settings ---
 STREAM_READ_TIMEOUT: float = 300.0  # 5 minutes idle timeout
+STREAM_CHUNK_SIZE: int = 64 * 1024  # 64 KB chunk size for high throughput
 
 
 # --- Modernized Relay Stream Function ---
@@ -51,7 +52,7 @@ async def relay_stream(
         while not reader.at_eof():
             try:
                 data = await asyncio.wait_for(
-                    reader.read(4096), timeout=STREAM_READ_TIMEOUT
+                    reader.read(STREAM_CHUNK_SIZE), timeout=STREAM_READ_TIMEOUT
                 )
             except asyncio.TimeoutError:
                 logger.debug(
@@ -230,7 +231,8 @@ async def _create_fastest_connection(
         tasks = {
             asyncio.create_task(
                 asyncio.wait_for(
-                    asyncio.open_connection(ip, port), timeout=timeout
+                    asyncio.open_connection(ip, port, limit=262144),
+                    timeout=timeout,
                 ),
                 name=ip,
             )
