@@ -1,7 +1,7 @@
 ---
 type: implementation_plan
 title: Tor Integration Implementation Plan
-description: Lean, no-download `--tor` support for Wormhole using a user-installed tor binary, a private daemon lifecycle, a bridge bootstrap ladder, aiohttp-socks transport, and a Quay.io Tor image variant.
+description: Lean, no-download `--tor` support for Wormhole using a user-installed tor binary, a private daemon lifecycle, a bridge bootstrap ladder, python-socks transport, and a Quay.io Tor image variant.
 timestamp: "2026-09-22T00:00:00Z"
 ---
 
@@ -41,7 +41,7 @@ Wormhole will gain an optional `--tor` mode that routes all outbound proxy traff
 |---|---|
 | User-installed `tor` only (`--tor-binary` / `PATH`), no downloads | Removes supply-chain risk of fetching binaries; the OS package manager remains the trust channel. |
 | Spawn a private daemon on random loopback ports | A listener on `9050` has unknown provenance; a private daemon isolates `DataDirectory`, ports, and lifetime. |
-| `stem` for process control, `aiohttp-socks` for transport | `stem` is pure Python and handles bootstrap detection + owning-process shutdown; `aiohttp-socks.open_connection()` matches the raw-stream relay model in `handler.py`. |
+| `stem` for process control, `python-socks` for transport | `stem` is pure Python and handles bootstrap detection + owning-process shutdown; `python-socks` connects raw streams and accepts an explicit timeout (aiohttp-socks' `open_connection` is deprecated and caps connects at 60 s, breaking onion rendezvous). |
 | Bridge pool handed to tor, not selected by Wormhole | Tor pins a primary guard and fails over on its own; per-launch random selection weakens guard stability. |
 | Re-fetch bridges only on failure, bounded (max 3 batches) | Burned bridges stay burned; rotation is a connectivity-over-stability tradeoff and must be rare. |
 | No hardcoded public bridge lists | Published bridges are blocked within days; BridgeDB exists so bridges stay unenumerable. |
@@ -119,7 +119,7 @@ graph TD
     DomainCheck -->|blocked| Deny[403 Forbidden]
     DomainCheck -->|allowed| TorMode{Tor mode?}
     TorMode -->|No| DNS[resolver.py + Happy Eyeballs]
-    TorMode -->|Yes| SocksConnect[aiohttp_socks.open_connection]
+    TorMode -->|Yes| SocksConnect[python-socks SOCKS5 connect]
     SocksConnect --> TorDaemon[Private tor daemon: 127.0.0.1 random port]
     TorDaemon --> TorNetwork[Tor network / guards / exit]
     TorNetwork --> Target[Target host or .onion service]
@@ -129,16 +129,16 @@ graph TD
 
 ```toml
 [project.optional-dependencies]
-tor = ["aiohttp-socks", "stem"]
+tor = ["python-socks[asyncio]", "stem"]
 
 [tool.poetry.dependencies]
-aiohttp-socks = { version = ">=0.12,<0.13", optional = true }
+python-socks = { version = ">=3.1,<4.0", extras = ["asyncio"], optional = true }
 stem = { version = ">=1.8,<2.0", optional = true }
 ```
 
 Because `dependencies` are dynamic (Poetry-generated), verify whether a `[tool.poetry.extras]` mapping is also required when implementing.
 
-Import policy: `proxy.py` and `tor.py` must import `aiohttp_socks` / `stem` lazily so Wormhole runs unchanged without the extra installed.
+Import policy: `proxy.py` and `tor.py` must import `python_socks` / `stem` lazily so Wormhole runs unchanged without the extra installed.
 
 ---
 
@@ -154,6 +154,7 @@ Import policy: `proxy.py` and `tor.py` must import `aiohttp_socks` / `stem` lazi
 | `DataDirectory` | `<tor-data-dir>/<rung>` | Per-rung isolation; persistent guards; 0700 on POSIX. |
 | `ClientOnly` | `1` | Never relay. |
 | `SafeSocks` | `1` | Warn about unsafe SOCKS usage. |
+| `SocksTimeout` | `240` | Onion rendezvous can exceed tor's 120 s default; client budgets are 60 s clearnet / 250 s onion. |
 | `Log` | `notice stdout` | Captured via `init_msg_handler`. |
 | `UseBridges` + `Bridge` + `ClientTransportPlugin` | bridge rungs only | See [§7](#7-bridge-bootstrap-ladder). |
 
@@ -162,11 +163,11 @@ Import policy: `proxy.py` and `tor.py` must import `aiohttp_socks` / `stem` lazi
 1. Discover the binary (`--tor-binary` → `PATH`) and parse `tor --version`; enforce a minimum version (proposed floor: `0.4.8`, revisit for webtunnel/snowflake behavior).
 2. Allocate two free ports via `bind(("127.0.0.1", 0))`; retry a rung once if tor reports the port as taken (small TOCTOU race).
 3. Create the data directory with restrictive permissions (`0700` on POSIX; note Windows ACL handling as an open question).
-4. Launch with `asyncio.to_thread(stem.process.launch_tor_with_config, ...)` using `take_ownership=True` (sets `__OwningControllerProcess`), `timeout=--tor-timeout`, `completion_percent=100`, and an `init_msg_handler` that forwards to loguru and keeps a ring buffer of the last ~200 lines.
+4. Launch with `stem.process.launch_tor_with_config(...)` on the event-loop thread using `take_ownership=True` (sets `__OwningControllerProcess`), `timeout=--tor-timeout`, `completion_percent=100`, and an `init_msg_handler` that forwards to loguru and keeps a ring buffer of the last ~200 lines.
 5. On success return `TorEndpoint(socks_url, process, rung)`; on failure raise `TorBootstrapError(reason, captured_logs)` for the classifier.
 6. On shutdown: `terminate()` → bounded wait → `kill()`; owning-process semantics guarantee tor exits even on `kill -9` of Wormhole.
 
-`stem` is synchronous; running it in a worker thread keeps the event loop responsive and remains compatible with `uvloop`, `winloop`, and Talyn.
+`stem` is synchronous and its bootstrap timeout relies on `signal.alarm`, which only works on the main thread, so the launch blocks the event loop during startup — before the proxy starts accepting connections — which keeps `uvloop`, `winloop`, and Talyn supported.
 
 ---
 
@@ -342,7 +343,7 @@ Because everything is musl-built, no glibc compatibility layer is involved; the 
 | Auto-download managers (`tornion`, `dtor`, `tor-http`) | Download external binaries, contradicting the locked trust model (patterns worth borrowing for Expert Bundle layouts and bootstrap UX). |
 | `aiohttp-tor` | Requires an installed tor daemon anyway; young project; revisit for hidden-service hosting. |
 | Trust system daemon on `9050`/`9150` | Unknown listener provenance; rejected outright. |
-| httpx-based stacks | Wormhole relays raw streams; SOCKS `open_connection` is the natural fit. |
+| httpx-based stacks | Wormhole relays raw streams; `python-socks` connects them directly and supports explicit timeouts. |
 | Deriving `Dockerfile.tor` `FROM` the published image | Races the base image build on the same git tag; see [§10](#10-docker-packaging-quayio). |
 
 ---
@@ -364,7 +365,7 @@ Because everything is musl-built, no glibc compatibility layer is involved; the 
 
 - [Tor Protocol Specification](https://spec.torproject.org/tor-spec/)
 - [stem documentation](https://stem.torproject.org/)
-- [aiohttp-socks](https://github.com/romis2012/aiohttp-socks) / [python-socks](https://github.com/romis2012/python-socks)
+- [python-socks](https://github.com/romis2012/python-socks)
 - [Red Hat Quay build trigger documentation](https://docs.redhat.com/en/documentation/red_hat_quay/3.13/html/builders_and_image_automation/build-trigger-overview) — evidence that triggers cannot pass build arguments.
 - [Alpine Linux package index](https://pkgs.alpinelinux.org/packages) — `tor`, `lyrebird`, `snowflake` versions.
 - [Tor Expert Bundle](https://www.torproject.org/download/tor/) — for understanding PT binary layouts, not for the trust model.

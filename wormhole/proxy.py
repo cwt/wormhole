@@ -16,6 +16,13 @@ from .network_monitor import monitor_network_changes, is_ipv6_available
 from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist, load_blocklist
 from .server import start_wormhole_server
+from .tor import (
+    TorBlockedError,
+    TorManager,
+    TorUnavailableError,
+    clear_active_endpoint,
+    set_active_endpoint,
+)
 from .version import VERSION
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
@@ -73,11 +80,42 @@ async def main_async(args: Namespace) -> None:
     Returns:
         None
     """
-    # Use a loop instead of recursion to avoid stack overflow on repeated restarts
-    while True:
-        should_restart = await _run_server_once(args)
-        if not should_restart:
-            break
+    # Start the private Tor daemon before the proxy begins accepting traffic,
+    # and keep it alive across server restarts (e.g. IPv6 changes).
+    tor_manager = None
+    if args.tor:
+        if args.allow_private:
+            logger.warning(
+                "--allow-private has no effect in Tor mode: DNS resolution "
+                "happens at the Tor exit."
+            )
+        tor_manager = TorManager(
+            binary=args.tor_binary,
+            bridges=tuple(args.tor_bridge or ()),
+            bridge_file=(
+                Path(args.tor_bridge_file) if args.tor_bridge_file else None
+            ),
+            data_dir=Path(args.tor_data_dir) if args.tor_data_dir else None,
+            pt_dir=Path(args.tor_pt_dir) if args.tor_pt_dir else None,
+            timeout=args.tor_timeout,
+            no_bridges=args.tor_no_bridges,
+            snowflake=args.tor_snowflake,
+            isolate_dest=args.tor_isolate_dest,
+            verbose=args.verbose,
+        )
+        endpoint = await tor_manager.start()
+        set_active_endpoint(endpoint)
+
+    try:
+        # Use a loop instead of recursion to avoid stack overflow on repeated restarts
+        while True:
+            should_restart = await _run_server_once(args)
+            if not should_restart:
+                break
+    finally:
+        if tor_manager is not None:
+            await tor_manager.stop()
+            clear_active_endpoint()
 
 
 async def _run_server_once(args: Namespace) -> bool:
@@ -416,6 +454,66 @@ def main() -> int:
         default=None,
         help="Path to a file of domains to block (inverted allowlist).",
     )
+    # Tor arguments
+    tor_group = parser.add_argument_group("Tor Options")
+    tor_group.add_argument(
+        "--tor",
+        action="store_true",
+        help="Route all outbound traffic through a private local tor daemon.",
+    )
+    tor_group.add_argument(
+        "--tor-binary",
+        metavar="PATH",
+        default=None,
+        help="Path to the tor binary [default: search PATH].",
+    )
+    tor_group.add_argument(
+        "--tor-bridge",
+        metavar="BRIDGE_LINE",
+        action="append",
+        default=None,
+        help="Bridge line to use (repeatable, forms a pool); implies --tor.",
+    )
+    tor_group.add_argument(
+        "--tor-bridge-file",
+        metavar="PATH",
+        default=None,
+        help="File with one bridge line per line; implies --tor.",
+    )
+    tor_group.add_argument(
+        "--tor-timeout",
+        metavar="SECONDS",
+        type=int,
+        default=90,
+        help="Bootstrap timeout per attempt [default: %(default)d].",
+    )
+    tor_group.add_argument(
+        "--tor-data-dir",
+        metavar="PATH",
+        default=None,
+        help="Directory for persistent Tor state [default: platform data dir].",
+    )
+    tor_group.add_argument(
+        "--tor-pt-dir",
+        metavar="PATH",
+        default=None,
+        help="Directory containing pluggable transport binaries.",
+    )
+    tor_group.add_argument(
+        "--tor-no-bridges",
+        action="store_true",
+        help="Only try a direct Tor connection (skip the bridge ladder).",
+    )
+    tor_group.add_argument(
+        "--tor-snowflake",
+        action="store_true",
+        help="Enable the snowflake bridge rung (slow to bootstrap).",
+    )
+    tor_group.add_argument(
+        "--tor-isolate-dest",
+        action="store_true",
+        help="Isolate streams per destination address.",
+    )
     args = parser.parse_args()
 
     # --- Utility Command Handling ---
@@ -497,8 +595,25 @@ def main() -> int:
         return 0
 
     # --- Main Server Execution ---
+    # Tor-specific options imply --tor when used on their own.
+    extra_tor_options = (
+        args.tor_bridge,
+        args.tor_bridge_file,
+        args.tor_binary,
+        args.tor_data_dir,
+        args.tor_pt_dir,
+        args.tor_no_bridges,
+        args.tor_snowflake,
+        args.tor_isolate_dest,
+    )
+    if any(extra_tor_options):
+        args.tor = True
+
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535.")
+
+    if args.tor and args.tor_timeout < 1:
+        parser.error("--tor-timeout must be a positive number of seconds.")
 
     if args.auth and not Path(args.auth).is_file():
         parser.error(f"Authentication file not found: {args.auth}")
@@ -510,6 +625,13 @@ def main() -> int:
         _run_async(run_main)
     except KeyboardInterrupt:
         print("\nInterrupted by user. Exiting.")
+    except TorUnavailableError as e:
+        logger.error(f"Tor support unavailable: {e}")
+        return 2
+    except TorBlockedError as e:
+        for line in e.report_lines():
+            logger.error(line)
+        return 3
     except Exception as e:
         # Catch-all for critical startup errors, like binding failure.
         print(f"A critical error occurred: {e}", file=sys.stderr)

@@ -28,6 +28,7 @@
   - **Automatic IPv6 Detection:** Automatically detects when IPv6 becomes available and can restart the server to enable dual-stack support.
   - **Security:** Includes safeguards to prevent proxying to private and reserved IP addresses, mitigating the risk of SSRF (Server-Side Request Forgery) attacks.
   - **High Performance:** Built with `asyncio` and can leverage `uvloop` or `winloop` for even better performance. The number of concurrent connections is dynamically adjusted based on system limits.
+  - **Tor Support (optional):** Routes all outbound traffic through a private, locally spawned **tor** daemon (never an unknown listener on `9050`/`9150`), with a bridge bootstrap ladder (obfs4, snowflake, webtunnel) for censored networks.
 
 -----
 
@@ -41,6 +42,8 @@
   - pywin32 (required for Windows)
   - [uvloop](https://github.com/MagicStack/uvloop) (optional for Linux and macOS)
   - [winloop](https://github.com/Vizonex/Winloop) (optional for Windows)
+  - [python-socks](https://github.com/romis2012/python-socks) and [stem](https://stem.torproject.org/) (optional, for `--tor`)
+  - A system **tor** binary and pluggable transports (optional, for `--tor`)
 
 -----
 
@@ -137,6 +140,43 @@ Wormhole includes built-in tools to securely manage users. These commands will p
     ```
 
     **Note:** If you used `--allowlist` and `--blocklist` during the `--update-ad-block-db` step, you still need to specify these options when running the server to apply them at runtime. The `--update-ad-block-db` step incorporates the allowlist/blocklist into the database, while server runtime options are applied separately for live filtering with the documented priority order.
+
+### Tor Support (optional)
+
+Wormhole can route all outbound traffic through a private, locally spawned **tor** daemon:
+
+```shell
+$ pip install 'wormhole-proxy[tor]'   # once, for python-socks and stem
+$ wormhole --tor
+```
+
+The **tor** daemon itself must be installed with your system package manager. On
+censored networks, Wormhole tries a direct connection first, then **obfs4** and
+**webtunnel** when their transport binaries are available, and **snowflake**
+only when `--tor-snowflake` is given (snowflake is slower to bootstrap).
+
+**Fedora 44** (installs the `snowflake` and `webtunnel` transports):
+
+```shell
+$ sudo dnf copr enable vgaetera/extras
+$ sudo dnf install tor snowflake webtunnel
+```
+
+Then run with the transports enabled:
+
+```shell
+$ wormhole --tor --tor-snowflake
+```
+
+The first visit to an **onion service** can take a couple of minutes while Tor
+fetches its descriptor; subsequent visits are fast.
+
+Use `--tor-bridge "obfs4 <address> <fingerprint> <params>"` (repeatable) or
+`--tor-bridge-file PATH` to supply your own bridges from
+[BridgeDB](https://bridges.torproject.org/), and `--tor-binary PATH` if the
+daemon is not in `PATH`. If every attempt fails, Wormhole reports whether Tor
+appears blocked or the network is offline: exit status `2` means tor or the
+optional dependencies are missing, and `3` means all bootstrap attempts failed.
 
 -----
 

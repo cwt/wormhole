@@ -1,8 +1,8 @@
 # .dockerignore
 
 # --- General ---
-# Ignore the Dockerfile itself and this .dockerignore file
-Dockerfile
+# Ignore this .dockerignore file, but never the Dockerfiles themselves:
+# Quay.io build triggers require the Dockerfile to be part of the build context.
 .dockerignore
 
 # --- Version Control ---

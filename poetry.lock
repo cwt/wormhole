@@ -1522,6 +1522,24 @@ setproctitle = ["setproctitle"]
 testing = ["filelock"]
 
 [[package]]
+name = "python-socks"
+version = "3.1.1"
+description = "Proxy (SOCKS4, SOCKS5, HTTP CONNECT) client for Python"
+optional = true
+python-versions = ">=3.9.0"
+groups = ["main"]
+markers = "extra == \"tor\""
+files = [
+    {file = "python_socks-3.1.1-py3-none-any.whl", hash = "sha256:327e0d6378702c73a7790bf732e9f01392f17b48c7348a50b5bd1f710c2df1be"},
+    {file = "python_socks-3.1.1.tar.gz", hash = "sha256:8d3e817cdbe858dc0bb8c8fdc8e79b6ce37acce110d33374c6f57a675cc9029e"},
+]
+
+[package.extras]
+anyio = ["anyio (>=4.12.1,<5.0.0)"]
+asyncio = ["async-timeout (>=5.0.1) ; python_version < \"3.11\""]
+trio = ["trio (>=0.30.0)"]
+
+[[package]]
 name = "pytokens"
 version = "0.4.1"
 description = "A Fast, spec compliant Python 3.14+ tokenizer that runs on older Pythons."
@@ -1606,6 +1624,18 @@ files = [
     {file = "pywin32-312-cp39-cp39-win32.whl", hash = "sha256:d620900033cc7531e50727c3c8333091df5dd3ffe6d68cdca38c03f5821408d5"},
     {file = "pywin32-312-cp39-cp39-win_amd64.whl", hash = "sha256:dc90147579a905b8635e1b0ec6514967dcb07e6e0d9c42f1477feef14cac23bb"},
     {file = "pywin32-312-cp39-cp39-win_arm64.whl", hash = "sha256:02ebca0f0242b75292e218065004310d6a477407c09fa449bfe4f6022bc0c0fc"},
+]
+
+[[package]]
+name = "stem"
+version = "1.8.2"
+description = "Stem is a Python controller library that allows applications to interact with Tor (https://www.torproject.org/)."
+optional = true
+python-versions = "*"
+groups = ["main"]
+markers = "extra == \"tor\""
+files = [
+    {file = "stem-1.8.2.tar.gz", hash = "sha256:83fb19ffd4c9f82207c006051480389f80af221a7e4783000aedec4e384eb582"},
 ]
 
 [[package]]
@@ -1884,8 +1914,9 @@ propcache = ">=0.2.1"
 [extras]
 performance = ["uvloop", "winloop"]
 talyn = ["talyn"]
+tor = ["python-socks", "stem"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "ce475bea7d594f5350109009bb22b5fca34be5f6f8cc6e559ca46d93eae7a32a"
+content-hash = "c64f36b91cf9dfc8b0336501e383abb7cfbe6011de7a22f8e1f69ce1820b849a"

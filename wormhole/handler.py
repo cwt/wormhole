@@ -1,6 +1,7 @@
 from .logger import logger, format_log_message as flm
 from .safeguards import has_public_ipv6, is_ad_domain, is_private_ip
 from .tools import get_content_length, get_host_and_port
+from .tor import is_tor_active, tor_open_connection
 from .resolver import resolver
 from .context import RequestContext
 import asyncio
@@ -116,6 +117,18 @@ async def _resolve_and_validate_host(
     if is_ad_domain(host):
         raise PermissionError(f"Blocked ad domain")
 
+    # In Tor mode, DNS resolution happens at the Tor exit (remote DNS), so
+    # the original hostname is passed through to the SOCKS5 proxy untouched.
+    if is_tor_active():
+        logger.debug(
+            flm(
+                f"Tor mode: using remote DNS for '{host}'.",
+                context.ident,
+                context.verbose,
+            )
+        )
+        return [host]
+
     # Check cache first — key includes allow_private to prevent SSRF bypass
     cache_key = (host, allow_private)
     if cache_key in DNS_CACHE:
@@ -203,9 +216,13 @@ async def _create_fastest_connection(
     context: RequestContext,
     timeout: int = 5,
     max_attempts: int = 3,
+    hostname: str | None = None,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """
     Helper function to create the fastest connection to the target server.
+
+    In Tor mode the connection is opened through the active SOCKS5 proxy
+    using ``hostname`` (remote DNS) instead of racing resolved IPs.
 
     Args:
         ip_list (list[str]): List of IP addresses to try.
@@ -213,10 +230,18 @@ async def _create_fastest_connection(
         context (RequestContext): The request context containing ident and verbose level.
         timeout (int, optional): Connection timeout in seconds. Defaults to 5.
         max_attempts (int, optional): Maximum number of attempts. Defaults to 3.
+        hostname (str | None, optional): Original hostname, required in Tor mode.
 
     Returns:
         tuple[asyncio.StreamReader, asyncio.StreamWriter]: Reader and writer for the server connection.
     """
+    if is_tor_active():
+        if hostname is None:
+            raise OSError(
+                "Tor mode requires a hostname for remote DNS resolution."
+            )
+        return await tor_open_connection(hostname, port, context)
+
     last_error = None
 
     for attempt in range(max_attempts):
@@ -364,7 +389,7 @@ async def process_https_tunnel(
         # Resolve and validate the host to get a list of potential IPs.
         ip_list = await _resolve_and_validate_host(host, context, allow_private)
         server_reader, server_writer = await _create_fastest_connection(
-            ip_list, port, context, max_attempts=max_attempts
+            ip_list, port, context, max_attempts=max_attempts, hostname=host
         )
 
         # Signal the client that the tunnel is established.
@@ -413,6 +438,7 @@ async def _send_http_request(
     payload: bytes,
     context: RequestContext,
     max_attempts: int = 3,
+    host: str | None = None,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """
     Helper function to connect and send an HTTP request.
@@ -427,6 +453,7 @@ async def _send_http_request(
         payload (bytes): Request payload.
         context (RequestContext): The request context containing ident and verbose level.
         max_attempts (int, optional): Maximum number of attempts to connect. Defaults to 3.
+        host (str | None, optional): Original hostname, forwarded to Tor mode.
 
     Returns:
         tuple[asyncio.StreamReader, asyncio.StreamWriter]: A tuple of server reader and writer.
@@ -434,7 +461,7 @@ async def _send_http_request(
     request_line = f"{method} {path or '/'} {version}".encode()
     headers_bytes = "\r\n".join(headers).encode()
     server_reader, server_writer = await _create_fastest_connection(
-        ip_list, port, context, max_attempts=max_attempts
+        ip_list, port, context, max_attempts=max_attempts, hostname=host
     )
 
     server_writer.write(request_line + b"\r\n" + headers_bytes + b"\r\n\r\n")
@@ -550,6 +577,7 @@ async def process_http_request(
                     payload,
                     context,
                     max_attempts,
+                    host=host,
                 )
             except Exception as e:
                 logger.warning(
@@ -588,6 +616,7 @@ async def process_http_request(
                     payload,
                     context,
                     max_attempts,
+                    host=host,
                 )
         else:
             # Original request was already HTTP/1.1 or newer
@@ -616,6 +645,7 @@ async def process_http_request(
                 payload,
                 context,
                 max_attempts,
+                host=host,
             )
 
         # Relay the server's response back to the client.

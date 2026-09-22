@@ -34,6 +34,7 @@ class TestMainAsync:
             syslog_port=514,
             blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
+            tor=False,
         )
 
         # Mock all the dependencies
@@ -99,6 +100,7 @@ class TestMainAsync:
             syslog_port=514,
             blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
+            tor=False,
         )
 
         # Mock all the dependencies
@@ -163,6 +165,7 @@ class TestMainAsync:
             syslog_port=514,
             blocklist=None,
             _test_mode=True,  # Prevent recursive calls in tests
+            tor=False,
         )
 
         # Mock all the dependencies
@@ -227,6 +230,7 @@ class TestMainAsync:
             syslog_port=514,
             blocklist="/path/to/blocklist",
             _test_mode=True,  # Prevent recursive calls in tests
+            tor=False,
         )
 
         # Mock all the dependencies
@@ -515,6 +519,16 @@ class TestMain:
                 mock_args.allowlist = None
                 mock_args.ad_block_db = None
                 mock_args.allow_private = False
+                mock_args.tor = False
+                mock_args.tor_binary = None
+                mock_args.tor_bridge = None
+                mock_args.tor_bridge_file = None
+                mock_args.tor_timeout = 90
+                mock_args.tor_data_dir = None
+                mock_args.tor_pt_dir = None
+                mock_args.tor_no_bridges = False
+                mock_args.tor_snowflake = False
+                mock_args.tor_isolate_dest = False
                 mock_parse.return_value = mock_args
 
                 # Mock asyncio.run to avoid actually running the async function
@@ -584,6 +598,16 @@ class TestMain:
                 mock_args.allowlist = None
                 mock_args.ad_block_db = None
                 mock_args.allow_private = False
+                mock_args.tor = False
+                mock_args.tor_binary = None
+                mock_args.tor_bridge = None
+                mock_args.tor_bridge_file = None
+                mock_args.tor_timeout = 90
+                mock_args.tor_data_dir = None
+                mock_args.tor_pt_dir = None
+                mock_args.tor_no_bridges = False
+                mock_args.tor_snowflake = False
+                mock_args.tor_isolate_dest = False
                 mock_parse.return_value = mock_args
 
                 mock_asyncio_run.return_value = None
@@ -635,12 +659,21 @@ class TestMain:
                     "allowlist",
                     "ad_block_db",
                     "allow_private",
+                    "tor_binary",
+                    "tor_bridge",
+                    "tor_bridge_file",
+                    "tor_data_dir",
+                    "tor_pt_dir",
+                    "tor_no_bridges",
+                    "tor_snowflake",
+                    "tor_isolate_dest",
                 ):
                     setattr(mock_args, attr, None)
                 mock_args.host = "127.0.0.1"
                 mock_args.port = 8080
                 mock_args.verbose = 0
                 mock_args.license = False
+                mock_args.tor = False
                 mock_parse.return_value = mock_args
 
                 mock_asyncio_run.return_value = None

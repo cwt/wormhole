@@ -39,6 +39,7 @@ wormhole = "wormhole.proxy:main"
 [project.optional-dependencies]
 performance = ["winloop", "uvloop"]
 talyn = ["talyn"]
+tor = ["python-socks[asyncio]", "stem"]
 
 # Poetry-specific configuration
 [tool.poetry]
@@ -57,6 +58,10 @@ pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
 winloop = { version = "*", markers = "sys_platform == 'win32'", optional = true }
 uvloop = { version = "*", markers = "sys_platform != 'win32'", optional = true }
 talyn = { version = "*", markers = "python_version >= '3.13' and sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'riscv64')", optional = true }
+
+# Optional Tor support packages
+python-socks = { version = ">=3.1,<4.0", extras = ["asyncio"], optional = true }
+stem = { version = ">=1.8,<2.0", optional = true }
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.5"
