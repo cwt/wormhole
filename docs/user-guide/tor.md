@@ -97,7 +97,7 @@ addresses work without any explicit configuration:
 
 ```bash
 curl -x http://127.0.0.1:8800 \
-  http://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/
+  http://juhanurmihxlp77nkq76byazcldy2hlmovfu2epvl5ankdibsot4csyd.onion/
 ```
 
 The first visit to an onion service can take a couple of minutes while Tor
