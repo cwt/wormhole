@@ -14,6 +14,7 @@ Welcome to the **Wormhole** documentation portal. Wormhole is a high-performance
 - [🚀 Getting Started](user-guide/getting-started.md) — Installation, quickstart, CLI options, and event loop configuration.
 - [🔐 Authentication Management](user-guide/authentication.md) — Setting up Digest SHA-256 user accounts and security enforcement.
 - [🛡️ Ad-Blocking & Safeguards](user-guide/ad-blocking.md) — SQLite blocklist generation, custom blocklists, and domain allowlists.
+- [🧅 Tor Support](user-guide/tor.md) — Private local tor daemon, bridge bootstrap ladder, onion services, and failure reporting.
 
 ## 🏗️ Architecture & System Design
 
