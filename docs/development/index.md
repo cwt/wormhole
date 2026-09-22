@@ -25,5 +25,8 @@ Welcome to the development and engineering documentation portal for Wormhole.
 - [⚡ Experimental Talyn Event Loop Integration](talyn-event-loop.md)
   Architecture, target Linux platforms, fallback safety, and opt-in setup for dogfood testing Talyn.
 
+- [🧅 Tor Integration Implementation Plan](tor-integration-plan.md)
+  Lean, no-download `--tor` design: private daemon lifecycle, bridge bootstrap ladder, failure classification, and testing strategy.
+
 - [🐛 Bug Tracker](bugs/index.md)
   Complete index of all identified bugs and code quality findings (`001.md` – `019.md`).

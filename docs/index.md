@@ -29,4 +29,5 @@ Welcome to the **Wormhole** documentation portal. Wormhole is a high-performance
 - [📝 Chronological Log](development/log.md) — Development journey and version history.
 - [🎓 Lessons Learned](development/lessons/index.md) — Engineering retrospectives and systemic defect analysis.
 - [⚡ Experimental Talyn Event Loop](development/talyn-event-loop.md) — Dogfooding setup, target Linux architectures, and fallback mechanics.
+- [🧅 Tor Integration Implementation Plan](development/tor-integration-plan.md) — Lean, no-download `--tor` design: private daemon lifecycle, bridge bootstrap ladder, and blocked-network reporting.
 - [🐛 Bug Tracker](development/bugs/index.md) — Detailed registry of audited issues (`001.md` – `019.md`).
