@@ -189,21 +189,31 @@ $ wormhole --help
 The output will be similar to this:
 
 ```
-usage: wormhole [-h] [-H HOST] [-p PORT] [--allow-private] [-S SYSLOG_HOST] [-P SYSLOG_PORT] [-l] [-v]
-                [--auth AUTH_FILE] [--auth-add <AUTH_FILE> <USERNAME>] [--auth-mod <AUTH_FILE> <USERNAME>]
-                [--auth-del <AUTH_FILE> <USERNAME>] [--ad-block-db AD_BLOCK_DB] [--update-ad-block-db DB_PATH]
-                [--allowlist ALLOWLIST] [--blocklist BLOCKLIST]
+usage: wormhole [-h] [-H HOST] [-p PORT] [--allow-private] [--auto-ipv6]
+                [-S SYSLOG_HOST] [-P SYSLOG_PORT] [-l] [-v] [--auth AUTH_FILE]
+                [--auth-add <AUTH_FILE> <USERNAME>]
+                [--auth-mod <AUTH_FILE> <USERNAME>]
+                [--auth-del <AUTH_FILE> <USERNAME>]
+                [--ad-block-db AD_BLOCK_DB] [--update-ad-block-db DB_PATH]
+                [--allowlist ALLOWLIST] [--blocklist BLOCKLIST] [--tor]
+                [--tor-binary PATH] [--tor-bridge BRIDGE_LINE]
+                [--tor-bridge-file PATH] [--tor-timeout SECONDS]
+                [--tor-data-dir PATH] [--tor-pt-dir PATH] [--tor-no-bridges]
+                [--tor-snowflake] [--tor-isolate-dest]
 
-Wormhole (3.1.3): Asynchronous I/O HTTP/S Proxy
+Wormhole (3.6.0): Asynchronous I/O HTTP/S Proxy
 
 options:
   -h, --help            show this help message and exit
-  -H HOST, --host HOST  Host address to bind [default: 0.0.0.0]
-  -p PORT, --port PORT  Port to listen on [default: 8800]
-  --allow-private       Allow proxying to private and reserved IP addresses (disabled by default)
-  -S SYSLOG_HOST, --syslog-host SYSLOG_HOST
+  -H, --host HOST       Host address to bind [default: 0.0.0.0]
+  -p, --port PORT       Port to listen on [default: 8800]
+  --allow-private       Allow proxying to private and reserved IP addresses
+                        (disabled by default)
+  --auto-ipv6           Automatically detect IPv6 availability and restart
+                        server when IPv6 becomes available
+  -S, --syslog-host SYSLOG_HOST
                         Syslog host or path (e.g., /dev/log)
-  -P SYSLOG_PORT, --syslog-port SYSLOG_PORT
+  -P, --syslog-port SYSLOG_PORT
                         Syslog port [default: 514]
   -l, --license         Print license information and exit
   -v, --verbose         Increase verbosity (-v, -vv)
@@ -213,19 +223,43 @@ Authentication Options:
   --auth-add <AUTH_FILE> <USERNAME>
                         Add a user to the authentication file and exit.
   --auth-mod <AUTH_FILE> <USERNAME>
-                        Modify a user's password in the authentication file and exit.
+                        Modify a user's password in the authentication file
+                        and exit.
   --auth-del <AUTH_FILE> <USERNAME>
                         Delete a user from the authentication file and exit.
 
 Ad-Blocker Options:
   --ad-block-db AD_BLOCK_DB
-                        Path to the SQLite database file containing domains to block.
+                        Path to the SQLite database file containing domains to
+                        block.
   --update-ad-block-db DB_PATH
-                        Fetch public ad-block lists and compile them into a database file, then exit.
+                        Fetch public ad-block lists and compile them into a
+                        database file, then exit.
   --allowlist ALLOWLIST
-                        Path to a file of domains to extend the default allowlist.
+                        Path to a file of domains to extend the default
+                        allowlist.
   --blocklist BLOCKLIST
-                        Path to a file of domains to block (inverted allowlist).
+                        Path to a file of domains to block (inverted
+                        allowlist).
+
+Tor Options:
+  --tor                 Route all outbound traffic through a private local tor
+                        daemon.
+  --tor-binary PATH     Path to the tor binary [default: search PATH].
+  --tor-bridge BRIDGE_LINE
+                        Bridge line to use (repeatable, forms a pool); implies
+                        --tor.
+  --tor-bridge-file PATH
+                        File with one bridge line per line; implies --tor.
+  --tor-timeout SECONDS
+                        Bootstrap timeout per attempt [default: 90].
+  --tor-data-dir PATH   Directory for persistent Tor state [default: platform
+                        data dir].
+  --tor-pt-dir PATH     Directory containing pluggable transport binaries.
+  --tor-no-bridges      Only try a direct Tor connection (skip the bridge
+                        ladder).
+  --tor-snowflake       Enable the snowflake bridge rung (slow to bootstrap).
+  --tor-isolate-dest    Isolate streams per destination address.
 ```
 
 -----
@@ -239,7 +273,7 @@ Official images are available at [quay.io/cwt/wormhole](https://quay.io/reposito
 Pull the desired version tag from Quay.io.
 
 ```shell
-# Replace <tag> with a specific version, e.g., v3.1.2  
+# Replace <tag> with a specific version, e.g., v3.6.0
 podman pull quay.io/cwt/wormhole:<tag>
 ```
 

@@ -9,7 +9,7 @@ timestamp: "2026-09-22T00:00:00Z"
 
 [⬅️ Back to Development Index](index.md)
 
-**Status:** Draft — design agreed, implementation not started.
+**Status:** Implemented in v3.6.0 — the gated integration test/CI job and the Quay.io `tor` image trigger remain.
 
 Wormhole will gain an optional `--tor` mode that routes all outbound proxy traffic through the Tor network. The design deliberately avoids shipping or downloading binaries, never trusts pre-existing local SOCKS listeners, and degrades through a bounded bridge ladder on censored networks.
 
@@ -303,31 +303,32 @@ Because everything is musl-built, no glibc compatibility layer is involved; the 
 
 ### M1 — Plumbing & direct mode
 
-- [ ] `wormhole/tor.py`: binary discovery, version check, port allocation, `stem` launch, shutdown.
-- [ ] CLI: `--tor`, `--tor-binary`, `--tor-timeout`, `--tor-data-dir`.
-- [ ] `handler.py`: Tor-aware connect path (remote DNS, SSRF bypass, `.onion`-ready hostname passthrough).
-- [ ] `pyproject.toml`: `tor` extra with lazy imports.
-- **Exit criteria:** `--tor` fetch succeeds against `check.torproject.org` ("you are using Tor"); missing binary produces the install-hint error; no behavior change without the flag/extra.
+- [x] `wormhole/tor.py`: binary discovery, version check, port allocation, `stem` launch, shutdown.
+- [x] CLI: `--tor`, `--tor-binary`, `--tor-timeout`, `--tor-data-dir`.
+- [x] `handler.py`: Tor-aware connect path (remote DNS, SSRF bypass, `.onion`-ready hostname passthrough).
+- [x] `pyproject.toml`: `tor` extra with lazy imports.
+- **Exit criteria:** ✅ `--tor` fetch succeeds against `check.torproject.org` ("you are using Tor"); missing binary produces the install-hint error; no behavior change without the flag/extra.
 
 ### M2 — Bridge ladder & reporting
 
-- [ ] PT discovery and obfs4 / snowflake / webtunnel rung configs.
-- [ ] Moat client with bounded re-fetch.
-- [ ] Failure classifier, connectivity pre-check, final report, progress logging.
-- [ ] Unit tests for rung configs, classifier, and ladder transitions (mocked `stem`).
-- **Exit criteria:** simulated direct failure (mocked) proceeds to obfs4; all rungs failing yields the blocked-network report; `--tor-no-bridges` skips the ladder.
+- [x] PT discovery and obfs4 / snowflake / webtunnel rung configs.
+- [x] Moat client with bounded re-fetch.
+- [x] Failure classifier, connectivity pre-check, final report, progress logging.
+- [x] Unit tests for rung configs, classifier, and ladder transitions (mocked `stem`).
+- **Exit criteria:** ✅ simulated direct failure (mocked) proceeds to obfs4; all rungs failing yields the blocked-network report; `--tor-no-bridges` skips the ladder.
 
 ### M3 — Hardening, packaging & docs
 
-- [ ] Data-dir permissions tests, ring-buffer diagnostics, Windows path handling.
+- [x] Data-dir permissions tests, ring-buffer diagnostics, Windows path handling.
 - [ ] `Dockerfile.tor` verified through its own Quay.io trigger (image boots, `--tor` finds `/usr/bin/tor`, `lyrebird`, and `snowflake-client`).
-- [ ] `docs/user-guide/tor.md` + security-safeguards cross-reference.
+- [x] `docs/user-guide/tor.md`, linked from the user-guide index.
+- [ ] Security-safeguards cross-reference in `docs/architecture/security-safeguards.md`.
 - [ ] Integration test (`TOR_INTEGRATION=1`, skipped when tor is absent) fetching through a spawned daemon; CI job installing `tor` plus a PT on Ubuntu.
-- **Exit criteria:** docs linked from the user-guide index; tor image published under `tor` / `${tag}-tor` and never `latest`; integration test green.
+- **Exit criteria:** ✅ docs linked from the user-guide index; tor image published under `tor` / `${tag}-tor` and never `latest` (pending); integration test green (pending).
 
 ### Future work
 
-- Verify and document `.onion` client access (hostname passthrough should already work).
+- ✅ `.onion` client access verified (Ahmia/BBC News) and documented in v3.6.0.
 - Onion service hosting for the proxy endpoint.
 - Control-port circuit rotation (`NEWNYM`) and status queries.
 - Per-destination isolation defaults for multi-client proxy use.

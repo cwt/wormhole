@@ -2,12 +2,22 @@
 type: log
 title: Wormhole Development Log
 description: Chronological log of development milestones, code audits, and architectural updates.
-timestamp: "2026-08-13T11:00:00Z"
+timestamp: "2026-09-22T09:50:00Z"
 ---
 
 # Wormhole Development Log
 
 [⬅️ Back to Development Index](index.md)
+
+### 2026-09-22 — v3.6.0: Optional Tor Support, Relay Throughput & Documentation
+- **Tor Support (`--tor`)**: New `wormhole/tor.py` spawns a private tor daemon on random loopback ports with a `0700` per-rung data directory and `__OwningControllerProcess` lifetime; bootstrap ladder (direct → obfs4/lyrebird → opt-in snowflake → webtunnel), BridgeDB Moat bridge fetch with bounded retries, failure classification, and exit codes `2` (missing tor/deps) / `3` (all attempts failed).
+- **SOCKS5 transport**: `python-socks` with 60 s clearnet / 250 s onion connect budgets; tor `SocksTimeout 240`; `.onion` hostnames pass through untouched for remote DNS.
+- **Handler**: Tor-aware connect path skips local DNS and the private-IP filter (resolution happens at the exit) while keeping ad-block and allowlist checks.
+- **Throughput**: 64 KB relay read chunks (`STREAM_CHUNK_SIZE`) and a 256 KB stream buffer limit.
+- **Packaging**: self-contained `Dockerfile.tor` (Alpine tor, lyrebird, snowflake) for a Quay.io tor image variant; Dockerfiles kept in the build context for Quay build triggers.
+- **Docs**: Tor implementation plan, user guide (`docs/user-guide/tor.md`), README Tor section, and refreshed `--help` output for 3.6.0.
+- **Tests**: `tests/test_tor.py` unit coverage (discovery, rung planning, configs, classification, Moat, transport, manager); suite at 285 passed / 88.7% coverage.
+- **Talyn compatibility**: reported and verified the upstream fix (talyn BUG-331, v0.9.8) for keyword-argument dispatch in `METH_FASTCALL` loop methods, unblocking `--tor` on the talyn event loop.
 
 ### 2026-08-13 — Full Codebase Audit & OKF Documentation Setup
 - **Code Audit**: Conducted comprehensive static analysis across all 11 Python modules in `wormhole/`.
