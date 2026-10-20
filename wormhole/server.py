@@ -348,3 +348,45 @@ async def start_wormhole_server(
             )
         )
         raise
+
+
+# Public API exported for `from .server import *`.
+__all__ = [
+    "ACTIVE_CLIENTS",
+    "ACTIVE_CONNECTIONS",
+    "ACTIVE_STREAM_WRITERS",
+    "ACTIVE_WRITERS",
+    "CURRENT_TASKS",
+    "MAX_RETRY",
+    "MAX_TASKS",
+    "RequestContext",
+    "abort_connections",
+    "close_active_connections",
+    "close_all",
+    "close_all_active_connections",
+    "close_all_client_connections",
+    "close_all_connections",
+    "close_all_writers",
+    "close_clients",
+    "close_connections",
+    "disconnect_all_clients",
+    "disconnect_all_connections",
+    "disconnect_clients",
+    "flm",
+    "force_close_all_connections",
+    "force_close_clients",
+    "force_close_connections",
+    "force_disconnect_all",
+    "get_ident",
+    "handle_connection",
+    "kill_connections",
+    "logger",
+    "parse_request",
+    "process_http_request",
+    "process_https_tunnel",
+    "shutdown_all_connections",
+    "shutdown_connections",
+    "start_wormhole_server",
+    "terminate_connections",
+    "verify_credentials",
+]

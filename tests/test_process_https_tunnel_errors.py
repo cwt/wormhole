@@ -6,7 +6,6 @@ Additional unit tests for the process_https_tunnel function error conditions.
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
-from wormhole.context import RequestContext
 from wormhole.handler import process_https_tunnel
 
 

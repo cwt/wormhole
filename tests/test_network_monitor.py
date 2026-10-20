@@ -6,7 +6,7 @@ Unit tests for the network_monitor module.
 import pytest
 import asyncio
 import socket
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from wormhole.network_monitor import (
     is_ipv6_available,
     has_ipv6_connectivity,

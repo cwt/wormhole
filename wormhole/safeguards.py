@@ -1,6 +1,6 @@
 from .context import RequestContext
 from .logger import logger, format_log_message as flm
-from functools import lru_cache
+
 import aiosqlite
 import ipaddress
 import socket

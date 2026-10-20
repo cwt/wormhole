@@ -340,7 +340,7 @@ class TestAuthentication:
 
             try:
                 # Calculate the expected response
-                ha2_data = f"CONNECT:/".encode("utf-8")
+                ha2_data = "CONNECT:/".encode("utf-8")
                 ha2 = HASH_ALGORITHM(ha2_data).hexdigest()
                 response_data = (
                     f"{ha1}:abc123:00000001:xyz789:auth:{ha2}".encode("utf-8")

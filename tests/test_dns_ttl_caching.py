@@ -4,12 +4,9 @@ Unit tests for DNS TTL-based caching functionality.
 """
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 from wormhole.context import RequestContext
 from wormhole.handler import _resolve_and_validate_host, DNS_CACHE
-from wormhole.safeguards import is_ad_domain, is_private_ip
-from wormhole.resolver import resolver
 
 
 class TestDnsTtlCaching:
@@ -183,7 +180,7 @@ class TestDnsTtlCaching:
                             assert len(DNS_CACHE) <= DNS_CACHE_MAX_SIZE
 
                             # Oldest entries should have been evicted
-                            assert (f"host0.com", False) not in DNS_CACHE
+                            assert ("host0.com", False) not in DNS_CACHE
 
                             # New entry should be present
                             assert (host, False) in DNS_CACHE

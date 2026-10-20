@@ -151,7 +151,7 @@ class TestAuthManager:
             with patch(
                 "getpass.getpass", side_effect=["password123", "password123"]
             ):
-                with patch("sys.stderr") as mock_stderr:
+                with patch("sys.stderr"):
                     result = add_user(auth_file, "testuser")
                     assert result == 0
 
@@ -216,7 +216,7 @@ class TestAuthManager:
             with patch(
                 "getpass.getpass", side_effect=["password123", "different"]
             ):
-                with patch("sys.stderr") as mock_stderr:
+                with patch("sys.stderr"):
                     result = add_user(auth_file, "testuser")
                     assert result == 1
 

@@ -4,8 +4,7 @@ Unit tests for the safeguards module.
 """
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 from wormhole.context import RequestContext
 from wormhole.safeguards import (
     has_public_ipv6,

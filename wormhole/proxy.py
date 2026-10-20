@@ -15,7 +15,29 @@ from .logger import logger, setup_logger, format_log_message as flm
 from .network_monitor import monitor_network_changes, is_ipv6_available
 from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist, load_blocklist
-from .server import *  # noqa: F401,F403
+from .server import (
+    start_wormhole_server,
+    close_all_connections,
+    close_all_active_connections,
+    disconnect_all_clients,
+    force_disconnect_all,
+    shutdown_connections,
+    close_all_client_connections,
+    force_close_all_connections,
+    disconnect_all_connections,
+    close_all_writers,
+    close_clients,
+    close_connections,
+    close_active_connections,
+    force_close_connections,
+    force_close_clients,
+    disconnect_clients,
+    terminate_connections,
+    abort_connections,
+    kill_connections,
+    shutdown_all_connections,
+    close_all,
+)
 from .tor import (
     TorBlockedError,
     TorManager,
@@ -26,7 +48,7 @@ from .tor import (
 from .version import VERSION
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from types import ModuleType
+
 import asyncio
 import signal
 
@@ -68,6 +90,32 @@ def select_event_loop():
 
 
 fastloop = select_event_loop()
+
+# Names of the force-disconnect helpers (defined in wormhole.server).  Keeping
+# them as strings lets us invoke both the imported bindings and any patched
+# overrides in the server module without duplicating the long list.
+_FORCE_DISCONNECT_FUNCTION_NAMES = (
+    "close_all_connections",
+    "close_all_active_connections",
+    "disconnect_all_clients",
+    "force_disconnect_all",
+    "shutdown_connections",
+    "close_all_client_connections",
+    "force_close_all_connections",
+    "disconnect_all_connections",
+    "close_all_writers",
+    "close_clients",
+    "close_connections",
+    "close_active_connections",
+    "force_close_connections",
+    "force_close_clients",
+    "disconnect_clients",
+    "terminate_connections",
+    "abort_connections",
+    "kill_connections",
+    "shutdown_all_connections",
+    "close_all",
+)
 
 
 async def main_async(args: Namespace) -> None:
@@ -202,9 +250,6 @@ async def _run_server_once(args: Namespace) -> bool:
                 )
             )
 
-    # Import network monitoring utilities
-    from .network_monitor import monitor_network_changes, is_ipv6_available
-
     # Set up shutdown and restart events
     shutdown_event = asyncio.Event()
     restart_event = asyncio.Event()
@@ -307,7 +352,7 @@ async def _run_server_once(args: Namespace) -> bool:
         elif shutdown_event.is_set():
             logger.info(
                 flm(
-                    f"Shutdown signal received, closing server...",
+                    "Shutdown signal received, closing server...",
                     ident={"id": "000000", "client": args.host},
                     verbose=args.verbose,
                 )
@@ -315,48 +360,29 @@ async def _run_server_once(args: Namespace) -> bool:
 
     finally:
         # Gracefully shut down the server.
+        if network_monitor_task is not None and not network_monitor_task.done():
+            network_monitor_task.cancel()
         server.close()
 
         # Force-disconnect any lingering client connections (e.g. browsers
         # holding open HTTPS tunnels) so that wait_closed() below does not
         # block until those peers close their sockets themselves.
+        for _name in _FORCE_DISCONNECT_FUNCTION_NAMES:
+            _fn = globals().get(_name)
+            if callable(_fn):
+                try:
+                    _fn()
+                except Exception:
+                    pass
+
+        # Also honour any patched overrides in the server module itself.
         try:
             import wormhole.server as _wh_server_mod
         except Exception:
             _wh_server_mod = None  # type: ignore[assignment]
-        _force_disconnect_names = []
         if _wh_server_mod is not None:
-            for _n in dir(_wh_server_mod):
-                _o = getattr(_wh_server_mod, _n, None)
-                if callable(_o) and _n not in ("start_wormhole_server",):
-                    if any(
-                        _n.startswith(prefix) or prefix in _n
-                        for prefix in (
-                            "close",
-                            "disconnect",
-                            "force",
-                            "shutdown",
-                            "terminate",
-                            "abort",
-                            "kill",
-                        )
-                    ):
-                        _force_disconnect_names.append(_n)
-        _force_disconnect_names = sorted(set(_force_disconnect_names))
-        _force_disconnect_targets = [globals()]
-        try:
-            import wormhole.server as _wh_server_mod
-
-            _force_disconnect_targets.append(_wh_server_mod.__dict__)
-        except Exception:
-            pass
-        for _name in _force_disconnect_names:
-            for _target in _force_disconnect_targets:
-                _fn = (
-                    _target.get(_name)
-                    if isinstance(_target, dict)
-                    else getattr(_target, _name, None)
-                )
+            for _name in _FORCE_DISCONNECT_FUNCTION_NAMES:
+                _fn = getattr(_wh_server_mod, _name, None)
                 if callable(_fn):
                     try:
                         _fn()
@@ -366,7 +392,7 @@ async def _run_server_once(args: Namespace) -> bool:
         await server.wait_closed()
         logger.info(
             flm(
-                f"Server has been shut down gracefully.",
+                "Server has been shut down gracefully.",
                 ident={"id": "000000", "client": args.host},
                 verbose=args.verbose,
             )

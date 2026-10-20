@@ -4,9 +4,8 @@ Unit tests for the server module.
 """
 
 import pytest
-import asyncio
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from wormhole.server import handle_connection, start_wormhole_server, MAX_TASKS
+from unittest.mock import Mock, patch, AsyncMock
+from wormhole.server import handle_connection, start_wormhole_server
 
 
 class TestHandleConnection:

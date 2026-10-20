@@ -5,7 +5,7 @@ Unit tests for the logger module.
 
 import pytest
 import asyncio
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from wormhole.logger import LogThrottler, setup_logger, format_log_message
 
 

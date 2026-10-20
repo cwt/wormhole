@@ -6,7 +6,7 @@ Unit tests for the resolver module.
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch, mock_open
-from wormhole.resolver import Resolver, resolver
+from wormhole.resolver import Resolver
 import aiodns
 
 

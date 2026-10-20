@@ -5,7 +5,7 @@ Unit tests for the parse_request function.
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock
 from wormhole.context import RequestContext
 from wormhole.handler import parse_request
 

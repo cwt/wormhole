@@ -192,7 +192,7 @@ async def update_database(
                 for line in f:
                     if line.strip() and not line.startswith("#"):
                         all_blocked_domains.add(line.strip().lower())
-            logger.info(f"Added domains from custom blocklist to the database.")
+            logger.info("Added domains from custom blocklist to the database.")
         except FileNotFoundError:
             logger.warning(
                 "Custom blocklist file not found. Proceeding without it."

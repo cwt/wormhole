@@ -115,7 +115,7 @@ async def _resolve_and_validate_host(
     """
     # Ad-block check
     if is_ad_domain(host):
-        raise PermissionError(f"Blocked ad domain")
+        raise PermissionError("Blocked ad domain")
 
     # In Tor mode, DNS resolution happens at the Tor exit (remote DNS), so
     # the original hostname is passed through to the SOCKS5 proxy untouched.
@@ -751,7 +751,7 @@ async def parse_request(
             payload = await client_reader.readexactly(content_length)
         except asyncio.IncompleteReadError:
             logger.debug(
-                flm(f"Incomplete payload read.", context.ident, context.verbose)
+                flm("Incomplete payload read.", context.ident, context.verbose)
             )
             return None, None, None
 

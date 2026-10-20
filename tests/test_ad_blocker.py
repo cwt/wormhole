@@ -4,10 +4,8 @@ Unit tests for the ad_blocker module.
 """
 
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, Mock, patch, mock_open
 from wormhole.ad_blocker import (
-    BLOCKLIST_URLS,
     DOMAIN_REGEX,
     _fetch_list,
     _parse_domains_from_content,

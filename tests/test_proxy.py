@@ -5,9 +5,7 @@ Unit tests for the proxy module.
 
 import pytest
 import sys
-import asyncio
 import types
-import platform
 from contextlib import contextmanager
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from argparse import Namespace

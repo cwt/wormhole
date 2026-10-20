@@ -5,12 +5,10 @@ Integration tests for the RequestContext usage in the handler module.
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 from wormhole.context import RequestContext
 from wormhole.handler import (
     relay_stream,
-    process_http_request,
-    process_https_tunnel,
 )
 
 
