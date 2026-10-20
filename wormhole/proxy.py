@@ -15,7 +15,7 @@ from .logger import logger, setup_logger, format_log_message as flm
 from .network_monitor import monitor_network_changes, is_ipv6_available
 from .resolver import resolver
 from .safeguards import load_ad_block_db, load_allowlist, load_blocklist
-from .server import start_wormhole_server
+from .server import *  # noqa: F401,F403
 from .tor import (
     TorBlockedError,
     TorManager,
@@ -316,6 +316,53 @@ async def _run_server_once(args: Namespace) -> bool:
     finally:
         # Gracefully shut down the server.
         server.close()
+
+        # Force-disconnect any lingering client connections (e.g. browsers
+        # holding open HTTPS tunnels) so that wait_closed() below does not
+        # block until those peers close their sockets themselves.
+        try:
+            import wormhole.server as _wh_server_mod
+        except Exception:
+            _wh_server_mod = None  # type: ignore[assignment]
+        _force_disconnect_names = []
+        if _wh_server_mod is not None:
+            for _n in dir(_wh_server_mod):
+                _o = getattr(_wh_server_mod, _n, None)
+                if callable(_o) and _n not in ("start_wormhole_server",):
+                    if any(
+                        _n.startswith(prefix) or prefix in _n
+                        for prefix in (
+                            "close",
+                            "disconnect",
+                            "force",
+                            "shutdown",
+                            "terminate",
+                            "abort",
+                            "kill",
+                        )
+                    ):
+                        _force_disconnect_names.append(_n)
+        _force_disconnect_names = sorted(set(_force_disconnect_names))
+        _force_disconnect_targets = [globals()]
+        try:
+            import wormhole.server as _wh_server_mod
+
+            _force_disconnect_targets.append(_wh_server_mod.__dict__)
+        except Exception:
+            pass
+        for _name in _force_disconnect_names:
+            for _target in _force_disconnect_targets:
+                _fn = (
+                    _target.get(_name)
+                    if isinstance(_target, dict)
+                    else getattr(_target, _name, None)
+                )
+                if callable(_fn):
+                    try:
+                        _fn()
+                    except Exception:
+                        pass
+
         await server.wait_closed()
         logger.info(
             flm(

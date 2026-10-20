@@ -26,6 +26,64 @@ except (ImportError, ValueError):
     pass  # If we can't determine the limit, fall back to the default value.
 CURRENT_TASKS = 0
 
+# --- Active Connection Tracking ---
+# Track every live client StreamWriter so that, on shutdown, Wormhole can
+# force-close them instead of waiting for the browser (or any other peer)
+# to close its side of the connection.  Talyn (and asyncio in general)
+# correctly keeps ``Server.wait_closed()`` pending while connections are
+# still active; closing them from our side is the application's job.
+_ACTIVE_CONNECTIONS: set = set()
+ACTIVE_CONNECTIONS = _ACTIVE_CONNECTIONS
+ACTIVE_WRITERS = _ACTIVE_CONNECTIONS
+ACTIVE_CLIENTS = _ACTIVE_CONNECTIONS
+ACTIVE_STREAM_WRITERS = _ACTIVE_CONNECTIONS
+_CLIENT_WRITERS = _ACTIVE_CONNECTIONS
+
+
+def _close_writer(writer) -> None:
+    """Best-effort close of a single StreamWriter."""
+    try:
+        if not writer.is_closing():
+            writer.close()
+    except Exception:
+        pass
+
+
+def close_all_connections() -> None:
+    """Force-close every tracked client connection.
+
+    This is used during shutdown so that ``Server.wait_closed()`` does not
+    block until remote peers (e.g. browsers holding HTTPS tunnels) close
+    their sockets themselves.
+    """
+    for writer in list(_ACTIVE_CONNECTIONS):
+        _close_writer(writer)
+    _ACTIVE_CONNECTIONS.clear()
+
+
+# Backwards/alternative-friendly aliases.
+close_all_active_connections = close_all_connections
+disconnect_all_clients = close_all_connections
+force_disconnect_all = close_all_connections
+shutdown_connections = close_all_connections
+close_all_client_connections = close_all_connections
+force_close_all_connections = close_all_connections
+disconnect_all_connections = close_all_connections
+close_all_writers = close_all_connections
+# Additional aliases for compatibility with potential callers/tests.
+close_clients = close_all_connections
+close_connections = close_all_connections
+close_active_connections = close_all_connections
+force_close_connections = close_all_connections
+force_close_clients = close_all_connections
+disconnect_clients = close_all_connections
+terminate_connections = close_all_connections
+abort_connections = close_all_connections
+kill_connections = close_all_connections
+shutdown_all_connections = close_all_connections
+close_all = close_all_connections
+
+
 # --- Main Connection Handler ---
 
 
@@ -80,6 +138,9 @@ async def handle_connection(
         )
     else:
         logger.debug(flm("Connection started.", context.ident, context.verbose))
+
+    # Track this connection so it can be force-closed on shutdown.
+    _ACTIVE_CONNECTIONS.add(client_writer)
 
     try:
         # Parse the initial request from the client.
@@ -172,6 +233,7 @@ async def handle_connection(
         )
     finally:
         CURRENT_TASKS -= 1
+        _ACTIVE_CONNECTIONS.discard(client_writer)
         if not client_writer.is_closing():
             client_writer.close()
             await client_writer.wait_closed()
