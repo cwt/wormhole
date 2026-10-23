@@ -62,8 +62,10 @@ async def monitor_network_changes(
 
     logger.info(
         flm(
-            f"Network monitoring started. IPv6 available: {ipv6_available}, "
-            f"IPv6 connectivity: {ipv6_connectivity}",
+            f"Network monitoring started. Local IPv6 available: {ipv6_available}, "
+            f"local IPv6 connectivity: {ipv6_connectivity}. "
+            f"(This reflects this machine's own interfaces only; "
+            f"Tor exit routing is independent.)",
             ident,
             verbose,
         )
